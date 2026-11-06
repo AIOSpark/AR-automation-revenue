@@ -1,0 +1,378 @@
+// AIOSpark Approval System Store & Types (Layer 18)
+// Backs the Human Approval System with request management, append-only approval logs, and policy-mandated routing.
+
+import { AuditService } from '../audit/service';
+import { aiQualityStore } from '../observability/ai-quality';
+import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
+
+export type ApprovalActionType =
+  | 'ALTER_INVOICE_VALUE'
+  | 'ISSUE_CREDIT_NOTE'
+  | 'RECORD_PAYMENT_MATCH'
+  | 'SEND_CUSTOMER_COMMUNICATION'
+  | 'MODIFY_ACCOUNTING_RECORD'
+  | 'OTHER_HIGH_RISK';
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type ApprovalExecutionStatus = 'not_applicable' | 'pending' | 'succeeded' | 'failed';
+
+export type ApprovalLogEventType = 'created' | 'approved' | 'rejected' | 'modified' | 'executed';
+
+export interface ApprovalRequest {
+  id: string;
+  organization_id: string;
+  subject_type: 'exception' | 'invoice' | 'customer' | 'payment' | string;
+  subject_id: string;
+  action_type: ApprovalActionType | string;
+  proposed_action: Record<string, any>;
+  evidence: any[]; // Copied from originating AIAnalysis
+  confidence: number;
+  proposed_by: string; // Agent name or "system"
+  status: ApprovalStatus;
+  reviewed_by_user_id?: string | null;
+  reviewed_at?: string | null;
+  modification?: Record<string, any> | null;
+  rejection_reason?: string | null;
+  execution_status?: ApprovalExecutionStatus;
+  execution_error?: string | null;
+  executed_at?: string | null;
+  created_at: string;
+}
+
+export interface ApprovalLogEntry {
+  id: string;
+  approval_request_id: string;
+  event_type: ApprovalLogEventType;
+  actor_user_id?: string | null; // null for system events
+  details: Record<string, any>;
+  created_at: string;
+}
+
+export interface GraduatedAutonomyConfig {
+  id: string;
+  organization_id: string;
+  action_type: string;
+  auto_approve_enabled: boolean;
+  min_confidence_threshold: number; // e.g. 0.95
+}
+
+type ApprovalState = {
+  requests: ApprovalRequest[];
+  logs: ApprovalLogEntry[];
+  autonomyConfigs: GraduatedAutonomyConfig[];
+};
+
+class ApprovalStore {
+  private requests: Map<string, ApprovalRequest> = new Map();
+  // APPEND-ONLY LOG: Array preserves append-only ordering
+  private logs: ApprovalLogEntry[] = [];
+  private autonomyConfigs: Map<string, GraduatedAutonomyConfig> = new Map();
+
+  constructor() {
+    const state = readSnapshot<ApprovalState>('approvals');
+    if (!state) return;
+    this.requests = new Map(state.requests.map((item) => [item.id, item]));
+    this.logs = state.logs;
+    this.autonomyConfigs = new Map(state.autonomyConfigs.map((item) => [item.id, item]));
+  }
+
+  private persist(): void {
+    writeSnapshot<ApprovalState>('approvals', {
+      requests: Array.from(this.requests.values()),
+      logs: this.logs,
+      autonomyConfigs: Array.from(this.autonomyConfigs.values()),
+    });
+  }
+
+  public createRequest(
+    data: Omit<ApprovalRequest, 'id' | 'status' | 'created_at'>
+  ): ApprovalRequest {
+    const id = `appr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+
+    const req: ApprovalRequest = {
+      ...data,
+      id,
+      status: 'pending',
+      execution_status: 'not_applicable',
+      created_at: now,
+    };
+
+    this.requests.set(id, req);
+
+    // Write append-only log entry
+    this.appendLog({
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      approval_request_id: id,
+      event_type: 'created',
+      actor_user_id: null,
+      details: { proposed_action: req.proposed_action, action_type: req.action_type },
+      created_at: now,
+    });
+    this.persist();
+
+    // Wire into Layer 26 Audit Log
+    AuditService.record({
+      organization_id: req.organization_id,
+      actor_user_id: null,
+      actor_type: req.proposed_by ? 'agent' : 'system',
+      action_type: `approval_request.created`,
+      subject_type: req.subject_type || 'approval',
+      subject_id: req.subject_id || id,
+      after_state: { status: 'pending', action_type: req.action_type, proposed_action: req.proposed_action },
+      ai_context: req.evidence ? { evidence: req.evidence, confidence: req.confidence, agent_name: req.proposed_by } : null,
+      approval_context: { approval_request_id: id, status: 'pending' },
+      result: 'success',
+    });
+
+    return req;
+  }
+
+  public getRequest(id: string): ApprovalRequest | null {
+    return this.requests.get(id) || null;
+  }
+
+  public getRequests(orgId: string, statusFilter?: ApprovalStatus): ApprovalRequest[] {
+    const orgReqs = Array.from(this.requests.values()).filter((r) => r.organization_id === orgId);
+    if (statusFilter) {
+      return orgReqs.filter((r) => r.status === statusFilter);
+    }
+    return orgReqs;
+  }
+
+  public findByIdempotencyKey(orgId: string, idempotencyKey: string): ApprovalRequest | null {
+    return Array.from(this.requests.values()).find(
+      (request) => request.organization_id === orgId && request.proposed_action?.idempotency_key === idempotencyKey
+    ) || null;
+  }
+
+  public approveRequest(id: string, reviewerUserId: string): ApprovalRequest {
+    const req = this.requests.get(id);
+    if (!req) throw new Error(`Approval request not found: ${id}`);
+    if (req.status !== 'pending') throw new Error(`Approval request ${id} is already ${req.status}`);
+
+    const now = new Date().toISOString();
+    const beforeState = { status: req.status };
+    req.status = 'approved';
+    req.execution_status = 'pending';
+    req.execution_error = null;
+    req.executed_at = null;
+    req.reviewed_by_user_id = reviewerUserId;
+    req.reviewed_at = now;
+
+    this.appendLog({
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      approval_request_id: id,
+      event_type: 'approved',
+      actor_user_id: reviewerUserId,
+      details: { action_type: req.action_type },
+      created_at: now,
+    });
+
+    // Wire into Layer 26 Audit Log
+    AuditService.record({
+      organization_id: req.organization_id,
+      actor_user_id: reviewerUserId,
+      actor_type: 'user',
+      action_type: `${req.subject_type}.${req.action_type.toLowerCase()}.approved`,
+      subject_type: req.subject_type,
+      subject_id: req.subject_id,
+      before_state: beforeState,
+      after_state: { status: 'approved', action_type: req.action_type },
+      ai_context: req.evidence ? { evidence: req.evidence, confidence: req.confidence, agent_name: req.proposed_by } : null,
+      approval_context: { approval_request_id: id, status: 'approved', reviewer_id: reviewerUserId },
+      result: 'success',
+    });
+
+    // Wire into Layer 29 Observability AI Quality Feedback Loop
+    aiQualityStore.recordFromApprovalRequest(req, 'approved');
+    this.persist();
+
+    return req;
+  }
+
+  public rejectRequest(id: string, reviewerUserId: string, reason?: string): ApprovalRequest {
+    const req = this.requests.get(id);
+    if (!req) throw new Error(`Approval request not found: ${id}`);
+    if (req.status !== 'pending') throw new Error(`Approval request ${id} is already ${req.status}`);
+
+    const now = new Date().toISOString();
+    const beforeState = { status: req.status };
+    req.status = 'rejected';
+    req.execution_status = 'not_applicable';
+    req.execution_error = null;
+    req.executed_at = null;
+    req.reviewed_by_user_id = reviewerUserId;
+    req.reviewed_at = now;
+    req.rejection_reason = reason || null;
+
+    this.appendLog({
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      approval_request_id: id,
+      event_type: 'rejected',
+      actor_user_id: reviewerUserId,
+      details: { reason: req.rejection_reason },
+      created_at: now,
+    });
+
+    // Wire into Layer 26 Audit Log
+    AuditService.record({
+      organization_id: req.organization_id,
+      actor_user_id: reviewerUserId,
+      actor_type: 'user',
+      action_type: `${req.subject_type}.${req.action_type.toLowerCase()}.rejected`,
+      subject_type: req.subject_type,
+      subject_id: req.subject_id,
+      before_state: beforeState,
+      after_state: { status: 'rejected', rejection_reason: reason },
+      ai_context: req.evidence ? { evidence: req.evidence, confidence: req.confidence, agent_name: req.proposed_by } : null,
+      approval_context: { approval_request_id: id, status: 'rejected', reviewer_id: reviewerUserId, reason },
+      result: 'success',
+    });
+
+    // Wire into Layer 29 Observability AI Quality Feedback Loop
+    aiQualityStore.recordFromApprovalRequest(req, 'rejected');
+    this.persist();
+
+    return req;
+  }
+
+  public modifyAndApproveRequest(
+    id: string,
+    reviewerUserId: string,
+    modificationPayload: Record<string, any>
+  ): ApprovalRequest {
+    const req = this.requests.get(id);
+    if (!req) throw new Error(`Approval request not found: ${id}`);
+    if (req.status !== 'pending') throw new Error(`Approval request ${id} is already ${req.status}`);
+
+    const now = new Date().toISOString();
+    const beforeState = { status: req.status, proposed_action: req.proposed_action };
+    req.status = 'approved';
+    req.execution_status = 'pending';
+    req.execution_error = null;
+    req.executed_at = null;
+    req.reviewed_by_user_id = reviewerUserId;
+    req.reviewed_at = now;
+    req.modification = modificationPayload;
+
+    this.appendLog({
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      approval_request_id: id,
+      event_type: 'modified',
+      actor_user_id: reviewerUserId,
+      details: { original: req.proposed_action, modified: modificationPayload },
+      created_at: now,
+    });
+
+    this.appendLog({
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      approval_request_id: id,
+      event_type: 'approved',
+      actor_user_id: reviewerUserId,
+      details: { was_modified: true },
+      created_at: now,
+    });
+
+    // Wire into Layer 26 Audit Log
+    AuditService.record({
+      organization_id: req.organization_id,
+      actor_user_id: reviewerUserId,
+      actor_type: 'user',
+      action_type: `${req.subject_type}.${req.action_type.toLowerCase()}.modified_and_approved`,
+      subject_type: req.subject_type,
+      subject_id: req.subject_id,
+      before_state: beforeState,
+      after_state: { status: 'approved', modification: modificationPayload },
+      ai_context: req.evidence ? { evidence: req.evidence, confidence: req.confidence, agent_name: req.proposed_by } : null,
+      approval_context: { approval_request_id: id, status: 'approved', modification: modificationPayload, reviewer_id: reviewerUserId },
+      result: 'success',
+    });
+
+    // Wire into Layer 29 Observability AI Quality Feedback Loop
+    aiQualityStore.recordFromApprovalRequest(req, 'modified', modificationPayload);
+    this.persist();
+
+    return req;
+  }
+
+  public markExecutionResult(id: string, result: 'succeeded' | 'failed', error?: string): ApprovalRequest {
+    const req = this.requests.get(id);
+    if (!req) throw new Error(`Approval request not found: ${id}`);
+    if (req.status !== 'approved') throw new Error(`Approval request ${id} is not approved`);
+
+    const now = new Date().toISOString();
+    req.execution_status = result;
+    req.execution_error = result === 'failed' ? (error || 'Approval execution failed') : null;
+    req.executed_at = now;
+
+    this.appendLog({
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      approval_request_id: id,
+      event_type: 'executed',
+      actor_user_id: req.reviewed_by_user_id || null,
+      details: { result, error: req.execution_error },
+      created_at: now,
+    });
+
+    AuditService.record({
+      organization_id: req.organization_id,
+      actor_user_id: req.reviewed_by_user_id || null,
+      actor_type: 'user',
+      action_type: `approval_request.execution_${result}`,
+      subject_type: req.subject_type,
+      subject_id: req.subject_id,
+      after_state: { status: req.status, execution_status: result, error: req.execution_error },
+      approval_context: { approval_request_id: id, status: req.status, execution_status: result },
+      result: result === 'succeeded' ? 'success' : 'failure',
+    });
+    this.persist();
+
+    return req;
+  }
+
+  // --- APPEND-ONLY LOG GUARANTEE ---
+  // Note: Only append is supported. Update and Delete methods DO NOT exist.
+  private appendLog(entry: ApprovalLogEntry): void {
+    this.logs.push(entry);
+  }
+
+  public getLogs(requestId?: string): ApprovalLogEntry[] {
+    if (requestId) {
+      return this.logs.filter((l) => l.approval_request_id === requestId);
+    }
+    return [...this.logs];
+  }
+
+  // --- GRADUATED AUTONOMY CONFIG STORE ---
+  public setAutonomyConfig(config: GraduatedAutonomyConfig): void {
+    this.autonomyConfigs.set(config.id, config);
+    this.persist();
+  }
+
+  public getAutonomyConfig(orgId: string, actionType: string): GraduatedAutonomyConfig | null {
+    const key = `${orgId}:${actionType}`;
+    const cfg = Array.from(this.autonomyConfigs.values()).find(
+      (c) => c.organization_id === orgId && c.action_type === actionType
+    );
+    if (cfg) return cfg;
+
+    // Default configuration is ALWAYS disabled (auto_approve_enabled = false)
+    return {
+      id: `default_autonomy_${orgId}`,
+      organization_id: orgId,
+      action_type: actionType,
+      auto_approve_enabled: false,
+      min_confidence_threshold: 0.99,
+    };
+  }
+
+  public clearAll(): void {
+    this.requests.clear();
+    this.logs = [];
+    this.autonomyConfigs.clear();
+    deleteSnapshot('approvals');
+  }
+}
+
+export const approvalStore = new ApprovalStore();

@@ -1,0 +1,3 @@
+invoice_id,exception_type,severity,description
+PILOT-INV-001,POD_MISSING,HIGH,"Proof of Delivery missing for ₹1,00,000 balance"
+PILOT-INV-003,PO_MISMATCH,MEDIUM,PO PILOT-PO-003 line item rate mismatch

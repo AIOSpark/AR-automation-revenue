@@ -30,5 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "test-add1.ts", "test-add2.ts", "test-add3.ts", "test-add4.ts", "test-add5.ts", "test-add6.ts", "test-export.ts", "test-function.ts", "test-no-annot.ts", "test-top-level.ts"]
 }

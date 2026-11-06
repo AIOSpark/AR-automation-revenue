@@ -1,26 +1,4851 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #050505;
+  --foreground: #FFFFFF;
+  --brand-black: #050505;
+  --brand-red: #FF2D2D;
+  --brand-red-hover: #E51C1C;
+  --brand-white: #FFFFFF;
+  --surface-1: #0A0A0A;
+  --surface-2: #111111;
+  --surface-3: #1A1A1A;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-accent: rgba(255, 45, 45, 0.4);
+
+  --text-primary: #FFFFFF;
+  --text-secondary: #D1D5DB;
+  --text-muted: #9CA3AF;
+  --text-subtle: #6B7280;
+}
+
+html[data-theme="light"], body.light {
+  --background: #F8F9FA;
+  --foreground: #111827;
+  --brand-black: #FFFFFF;
+  --brand-red: #E53835;
+  --brand-red-hover: #C62828;
+  --brand-white: #111827;
+  --surface-1: #FFFFFF;
+  --surface-2: #F3F4F6;
+  --surface-3: #E5E7EB;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --border-accent: rgba(229, 56, 53, 0.4);
+
+  --text-primary: #111111;
+  --text-secondary: #374151;
+  --text-muted: #6B7280;
+  --text-subtle: #4B5563;
+
+  background-color: #F8F9FA !important;
+  color: #111827 !important;
+}
+
+html[data-theme="light"] header {
+  background-color: rgba(248, 249, 250, 0.9) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html[data-theme="light"] .workstation-shell {
+  background-color: #F8F9FA !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(229, 56, 53, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(245, 158, 11, 0.03) 0%, transparent 50%) !important;
+}
+
+html[data-theme="light"] .workstation-card,
+html[data-theme="light"] .workstation-card-interactive {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04) !important;
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .workstation-panel,
+html[data-theme="light"] .workstation-surface {
+  background-color: #F3F4F6 !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #111827 !important;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-brand-black: #050505;
+  --color-brand-red: #FF2D2D;
+  --color-brand-white: #ffffff;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: 'Newsreader', Georgia, Cambria, serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #050505;
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: clip;
+}
+
+.landing-shell {
+  overflow-x: clip;
+  background-image:
+    radial-gradient(ellipse at 78% 7%, rgba(255, 45, 45, 0.10) 0%, transparent 32%),
+    radial-gradient(ellipse at 10% 34%, rgba(16, 185, 129, 0.04) 0%, transparent 28%),
+    linear-gradient(180deg, #050505 0%, #080808 48%, #050505 100%);
+}
+
+/* Public landing composition: keep the persuasive surface wide and dense on
+   desktop. The product workspaces should read as applications, not cards. */
+/* Section padding — 80-96px desktop / 56px mobile to reduce page length */
+.landing-shell main > section {
+  padding-block: 5.25rem;
+  overflow: visible;
+}
+
+@media (max-width: 767px) {
+  .landing-shell main > section {
+    padding-block: 3.5rem;
+  }
+}
+
+.landing-shell main > section:first-child {
+  padding-block: 0;
+}
+
+.landing-shell table {
+  min-width: 980px;
+}
+
+@media (max-width: 1023px) {
+  .landing-shell table {
+    min-width: 820px;
+  }
+}
+
+.landing-shell section {
+  scroll-margin-top: 5rem;
+  overflow: visible;
+}
+
+/* Heading line-height guard — never let headings get clipped */
+.landing-shell h1,
+.landing-shell h2,
+.landing-shell h3 {
+  overflow: visible;
+  line-height: 1.15;
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+/* Scroll fade-in animations (200-400ms) */
+.landing-shell [data-reveal] {
+  transition: opacity 350ms cubic-bezier(0.16, 1, 0.3, 1), transform 350ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+/* Respect prefers-reduced-motion for all reveal animations */
+@media (prefers-reduced-motion: reduce) {
+  .landing-shell [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* Workstation light-mode surfaces. Keep the Copilot intentionally dark, but make
+   the application shell and dashboard content read as one light workspace. */
+html[data-theme="light"] .workstation-app {
+  background: #f8f9fa !important;
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .workstation-mobile-bar,
+html[data-theme="light"] .workstation-sidebar {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .workstation-main {
+  background: #f8f9fa !important;
+}
+
+/* Legacy workstation views still contain a few page-local dark utility classes.
+   Normalize those surfaces in light mode so every operational route shares the
+   same readable canvas instead of showing black seams and low-contrast text. */
+html[data-theme="light"] .workstation-main [class*="bg-black"],
+html[data-theme="light"] .workstation-main [class*="bg-[#050"],
+html[data-theme="light"] .workstation-main [class*="bg-[#07"],
+html[data-theme="light"] .workstation-main [class*="bg-[#08"],
+html[data-theme="light"] .workstation-main [class*="bg-[#090"],
+html[data-theme="light"] .workstation-main [class*="bg-[#0A"],
+html[data-theme="light"] .workstation-main [class*="bg-[#0D"],
+html[data-theme="light"] .workstation-main [class*="bg-[#0d"],
+html[data-theme="light"] .workstation-main [class*="bg-[#0E"],
+html[data-theme="light"] .workstation-main [class*="bg-[#0F"],
+html[data-theme="light"] .workstation-main [class*="bg-[#12"],
+html[data-theme="light"] .workstation-main [class*="bg-[#14"],
+html[data-theme="light"] .workstation-main [class*="bg-[#18"],
+html[data-theme="light"] .workstation-main [class*="bg-zinc-900"],
+html[data-theme="light"] .workstation-main [class*="bg-zinc-950"],
+html[data-theme="light"] .workstation-main [class*="bg-neutral-900"],
+html[data-theme="light"] .workstation-main [class*="bg-neutral-950"] {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .workstation-main [class*="border-white"],
+html[data-theme="light"] .workstation-main [class*="border-zinc-"],
+html[data-theme="light"] .workstation-main [class*="border-neutral-"] {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="light"] .workstation-main [class*="text-white"]:not(button):not([class*="bg-[#FF"]):not([class*="bg-[#EF"]):not([class*="bg-red-"]),
+html[data-theme="light"] .workstation-main [class*="text-zinc-100"],
+html[data-theme="light"] .workstation-main [class*="text-zinc-200"],
+html[data-theme="light"] .workstation-main [class*="text-zinc-300"],
+html[data-theme="light"] .workstation-main [class*="text-neutral-300"] {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .workstation-main [class*="text-zinc-400"],
+html[data-theme="light"] .workstation-main [class*="text-zinc-500"],
+html[data-theme="light"] .workstation-main [class*="text-neutral-400"],
+html[data-theme="light"] .workstation-main [class*="text-neutral-500"] {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .workstation-main input,
+html[data-theme="light"] .workstation-main select,
+html[data-theme="light"] .workstation-main textarea {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.16) !important;
+}
+
+html[data-theme="light"] .workstation-main [class*="divide-zinc"],
+html[data-theme="light"] .workstation-main [class*="divide-neutral"] {
+  --tw-divide-opacity: 0.12 !important;
+}
+
+html[data-theme="light"] .workstation-main .workstation-card,
+html[data-theme="light"] .workstation-main .workstation-card-interactive {
+  background-image: none !important;
+}
+
+/* Approval center: turn the legacy control-room layout into a calm, scannable
+   decision workspace while keeping the high-signal red/amber/green states. */
+.approval-page {
+  max-width: 1180px;
+}
+
+.approval-header {
+  padding: 1.15rem 1.25rem !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+}
+
+.approval-metrics {
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.report-metrics {
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.agents-metrics {
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.payments-metrics {
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.cash-unblock-metrics {
+  padding: 0 !important;
+}
+
+.approval-metrics > * {
+  min-height: 8.5rem;
+  border-radius: 0.85rem;
+  border: 0 !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.report-metrics > * {
+  min-height: 8.5rem;
+  border-radius: 0.85rem;
+  border: 0 !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.agents-metrics > * {
+  min-height: 8.5rem;
+  border-radius: 0.85rem;
+  border: 0 !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.payments-metrics > * {
+  min-height: 8.5rem;
+}
+
+.payments-metrics > .relative,
+.payments-metrics > div > .relative {
+  position: relative;
+  min-height: 8.5rem;
+  border: 0 !important;
+  border-radius: 0.85rem;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.payments-metrics > .relative::before,
+.payments-metrics > div > .relative::before {
+  content: '';
+  display: block;
+  height: 3px;
+  margin: -1rem -1rem 0.85rem;
+  background: #94a3b8;
+}
+
+.payments-metrics > *:nth-child(1) > .relative::before,
+.payments-metrics > *:nth-child(2) > .relative::before,
+.payments-metrics > .relative:nth-child(1)::before,
+.payments-metrics > .relative:nth-child(2)::before {
+  background: #10b981;
+}
+
+.payments-metrics > *:nth-child(3) > .relative::before,
+.payments-metrics > .relative:nth-child(3)::before {
+  background: #ef4444;
+}
+
+.payments-metrics > *:nth-child(4) > .relative::before,
+.payments-metrics > .relative:nth-child(4)::before {
+  background: #f59e0b;
+}
+
+.payments-metrics > * [class*="tracking-wider"] {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.payments-metrics > * [class*="tracking-wider"]::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.payments-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+.cash-unblock-metrics > * {
+  min-height: 9.25rem;
+  border: 0 !important;
+  border-radius: 0.85rem;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+  overflow: hidden;
+  padding: 0.85rem !important;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.cash-unblock-metrics > *:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.cash-unblock-metrics > *::before {
+  content: '';
+  display: block;
+  height: 3px;
+  margin: -1rem -1rem 0.85rem;
+  background: #94a3b8;
+}
+
+.cash-unblock-metrics > *:nth-child(1)::before {
+  background: #ff3b30;
+}
+
+.cash-unblock-metrics > *:nth-child(2)::before,
+.cash-unblock-metrics > *:nth-child(6)::before {
+  background: #10b981;
+}
+
+.cash-unblock-metrics > *:nth-child(3)::before {
+  background: #ef4444;
+}
+
+.cash-unblock-metrics > *:nth-child(4)::before,
+.cash-unblock-metrics > *:nth-child(5)::before {
+  background: #f59e0b;
+}
+
+.cash-unblock-metrics > * [class*="tracking-wider"] {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.cash-unblock-metrics > * [class*="tracking-wider"]::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.cash-unblock-metrics > * > .space-y-1 > .flex.items-center.justify-between {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.cash-unblock-metrics > * > .space-y-1 > .flex.items-center.justify-between > span:first-child {
+  line-height: 1.15;
+  font-size: 0.61rem;
+  letter-spacing: 0.1em;
+}
+
+.cash-unblock-metrics > * [class*="tracking-wider"] {
+  font-size: 0.52rem;
+  line-height: 1.15;
+}
+
+.cash-unblock-metrics > * .font-mono-num {
+  font-size: 1.55rem !important;
+  line-height: 1.1;
+}
+
+.cash-unblock-metrics > * [class*="text-[11px]"] {
+  font-size: 0.63rem !important;
+  line-height: 1.35;
+}
+
+.cash-unblock-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+.approval-metrics > *::before {
+  content: '';
+  display: block;
+  height: 3px;
+  margin: -1rem -1rem 0.85rem;
+  background: #94a3b8;
+}
+
+.report-metrics > *::before {
+  content: '';
+  display: block;
+  height: 3px;
+  margin: -1rem -1rem 0.85rem;
+  background: #94a3b8;
+}
+
+.agents-metrics > *::before {
+  content: '';
+  display: block;
+  height: 3px;
+  margin: -1rem -1rem 0.85rem;
+  background: #94a3b8;
+}
+
+.agents-metrics > *:nth-child(1)::before,
+.agents-metrics > *:nth-child(2)::before,
+.agents-metrics > *:nth-child(5)::before {
+  background: #10b981;
+}
+
+.agents-metrics > *:nth-child(3)::before {
+  background: #64748b;
+}
+
+.agents-metrics > *:nth-child(4)::before {
+  background: #f59e0b;
+}
+
+.agents-metrics > * [class*="tracking-wider"] {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.agents-metrics > * [class*="tracking-wider"]::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.agents-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+.report-metrics > *:nth-child(1)::before {
+  background: #ff3b30;
+}
+
+.report-metrics > *:nth-child(2)::before,
+.report-metrics > *:nth-child(3)::before {
+  background: #10b981;
+}
+
+.report-metrics > *:nth-child(4)::before {
+  background: #64748b;
+}
+
+.report-metrics > * [class*="tracking-wider"] {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.report-metrics > * [class*="tracking-wider"]::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.report-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+.approval-metrics > *:nth-child(1)::before {
+  background: #f59e0b;
+}
+
+.approval-metrics > *:nth-child(2)::before,
+.approval-metrics > *:nth-child(4)::before {
+  background: #10b981;
+}
+
+.approval-metrics > *:nth-child(3)::before {
+  background: #ef4444;
+}
+
+.approval-metrics > * [class*="tracking-wider"] {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.approval-metrics > * [class*="tracking-wider"]::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.approval-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+.approval-queue,
+.approval-detail,
+.approval-audit {
+  border-radius: 1rem;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.approval-queue,
+.approval-detail {
+  min-height: 25rem;
+}
+
+.approval-role,
+.approval-role-select {
+  border-radius: 0.55rem;
+}
+
+.approval-role-select {
+  padding: 0.35rem 0.5rem;
+}
+
+.approval-tabs {
+  border-radius: 0.6rem;
+}
+
+.approval-tabs button {
+  border-radius: 0.4rem;
+  padding-block: 0.45rem;
+}
+
+.approval-empty,
+.approval-detail-empty {
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  border-radius: 0.75rem;
+}
+
+html[data-theme="light"] .approval-header,
+html[data-theme="light"] .approval-role,
+html[data-theme="light"] .approval-metrics > *,
+html[data-theme="light"] .report-metrics > *,
+html[data-theme="light"] .agents-metrics > *,
+html[data-theme="light"] .approval-queue,
+html[data-theme="light"] .approval-detail,
+html[data-theme="light"] .approval-audit {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .approval-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="light"] .report-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="light"] .agents-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="light"] .payments-metrics > .relative,
+html[data-theme="light"] .payments-metrics > div > .relative {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .payments-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="light"] .cash-unblock-metrics > * {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(241, 245, 249, 0.62)) !important;
+  color: #0f172a !important;
+  border-color: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+html[data-theme="light"] .cash-unblock-metrics > *:hover {
+  border-color: rgba(255, 59, 48, 0.24) !important;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+html[data-theme="light"] .cash-unblock-metrics > * [class*="border-[#27272a]"] {
+  border-top-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="light"] .approval-role-select {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .approval-tabs {
+  background: #f1f5f9 !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+html[data-theme="light"] .approval-tabs button[class*="bg-zinc-800"] {
+  background: #0f172a !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .approval-empty,
+html[data-theme="light"] .approval-detail-empty {
+  border-color: rgba(15, 23, 42, 0.16) !important;
+  background: #f8fafc !important;
+}
+
+/* Integrations insight and navigation need their own hierarchy; the old
+   all-caps blocks were too flat and inherited low-contrast dark tokens. */
+.integrations-insight {
+  position: relative;
+  border-radius: 0.9rem;
+  padding: 1rem 1.1rem 1rem 1.2rem !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+}
+
+.integrations-insight::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  border-radius: 0.9rem 0 0 0.9rem;
+  background: #ff3b30;
+}
+
+.integrations-insight-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+  background: rgba(255, 59, 48, 0.1);
+  border: 1px solid rgba(255, 59, 48, 0.2);
+  flex-shrink: 0;
+}
+
+.integrations-insight-status {
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  color: #64748b !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.integrations-tabs {
+  gap: 0.2rem;
+  border-radius: 0.8rem;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+}
+
+.integrations-tabs button {
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.8rem;
+  letter-spacing: 0.04em;
+}
+
+html[data-theme="light"] .integrations-insight,
+html[data-theme="light"] .integrations-tabs {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .integrations-insight p {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .integrations-tabs button[class*="bg-zinc-800"] {
+  background: #0f172a !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .integrations-tabs button:not([class*="bg-zinc-800"]) {
+  color: #64748b !important;
+}
+
+/* CFO trend signals: use a quiet executive list with directional rails instead
+   of four identical nested rectangles. */
+.cfo-trend-list {
+  border-radius: 1rem;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.cfo-trend-item {
+  position: relative;
+  border: 0 !important;
+  border-radius: 0.8rem;
+  padding: 0.9rem 1rem 0.85rem 1.1rem !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+  overflow: hidden;
+}
+
+.cfo-trend-item::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: #94a3b8;
+}
+
+.cfo-trend-item:nth-child(n + 2)::before {
+  background: #10b981;
+}
+
+.cfo-trend-item [class*="uppercase"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  letter-spacing: 0.08em;
+}
+
+.cfo-trend-item [class*="uppercase"]::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+html[data-theme="light"] .cfo-trend-item {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .workstation-shell {
+  background: #f8f9fa !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .workstation-shell [class*="bg-black"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#050"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#07"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#08"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#090"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#0A"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#0D"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#0d"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#0E"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#0F"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#12"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#14"],
+html[data-theme="light"] .workstation-shell [class*="bg-[#18"] {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .workstation-shell [class*="text-white"]:not(button):not([class*="bg-[#FF"]),
+html[data-theme="light"] .workstation-shell [class*="text-neutral-300"],
+html[data-theme="light"] .workstation-shell [class*="text-neutral-400"],
+html[data-theme="light"] .workstation-shell [class*="text-neutral-500"] {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .onboarding-welcome {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="light"] .onboarding-welcome-icon {
+  background: rgba(255, 59, 48, 0.08) !important;
+  border-color: rgba(255, 59, 48, 0.22) !important;
+}
+
+html[data-theme="light"] .onboarding-welcome-title {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .onboarding-welcome-copy {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .workstation-command-status {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .workstation-command-status .text-white {
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .dashboard-command-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .dashboard-command-header h1,
+html[data-theme="light"] .dashboard-command-header .text-white,
+html[data-theme="light"] .dashboard-command-header .text-neutral-300 {
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .dashboard-command-header .text-neutral-400,
+html[data-theme="light"] .dashboard-command-header .text-neutral-500 {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .dashboard-mode-switcher {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] .dashboard-mode-switcher .text-neutral-400 {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .dashboard-mode-switcher .bg-black\/40 {
+  background: #e2e8f0 !important;
+  color: #475569 !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+html[data-theme="light"] .dashboard-management-panel {
+  background: linear-gradient(90deg, #ffffff 0%, #f8fafc 100%) !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .dashboard-management-panel .text-white {
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .dashboard-management-panel .text-neutral-400 {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .copilot-helper {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #1e293b !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14) !important;
+}
+
+html[data-theme="light"] .copilot-helper:hover {
+  border-color: rgba(255, 59, 48, 0.45) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .copilot-shortcut {
+  background: #f1f5f9 !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .copilot-trigger:not([class*="bg-[#FF3B30]"]) {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(255, 59, 48, 0.45) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16) !important;
+}
+
+html[data-theme="light"] .copilot-face {
+  background: linear-gradient(135deg, #ffffff, #e2e8f0) !important;
+  border-color: rgba(15, 23, 42, 0.16) !important;
+}
+
+html[data-theme="light"] .copilot-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22) !important;
+}
+
+html[data-theme="light"] .copilot-header,
+html[data-theme="light"] .copilot-composer {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+html[data-theme="light"] .copilot-header .text-white {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .copilot-telemetry,
+html[data-theme="light"] .copilot-quick-prompts {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .copilot-input {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .copilot-typing {
+  background: #f1f5f9 !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+html[data-theme="light"] .copilot-assistant-message {
+  background: #f1f5f9 !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .copilot-assistant-message .text-white {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .copilot-email-card {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .notification-bell {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #334155 !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+html[data-theme="light"] .notification-bell:hover {
+  background: #f8fafc !important;
+  border-color: rgba(255, 59, 48, 0.4) !important;
+}
+
+html[data-theme="light"] .notification-bell svg {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .notification-menu {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.16) !important;
+}
+
+.font-serif-editorial {
+  font-family: 'Newsreader', Georgia, Cambria, serif;
+  font-style: italic;
+}
+
+/* Themed Browser Surfaces */
+::selection {
+  background-color: rgba(255, 59, 48, 0.28);
+  color: #FFFFFF;
+}
+
+input, textarea, select {
+  caret-color: #FF3B30;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(255, 59, 48, 0.55);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Custom subtle warm scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0A0B0E;
+}
+::-webkit-scrollbar-thumb {
+  background: #272A34;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #FF3B30;
+}
+
+/* Tactile Financial Workstation Surface System */
+.workstation-shell {
+  background-color: #0A0B0E;
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 59, 48, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(245, 158, 11, 0.03) 0%, transparent 50%);
+}
+
+/* Landing Page Motion & Typography Animation System */
+@keyframes floatGlow {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-8px) scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+@keyframes pulseBorder {
+  0%, 100% {
+    border-color: rgba(255, 59, 48, 0.3);
+    box-shadow: 0 0 15px rgba(255, 59, 48, 0.1);
+  }
+  50% {
+    border-color: rgba(255, 59, 48, 0.7);
+    box-shadow: 0 0 25px rgba(255, 59, 48, 0.25);
+  }
+}
+
+@keyframes textShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-float-glow {
+  animation: floatGlow 6s ease-in-out infinite;
+}
+
+.animate-pulse-border {
+  animation: pulseBorder 3s ease-in-out infinite;
+}
+
+.text-shimmer {
+  color: #ffffff;
+  background: none;
+  animation: none;
+}
+
+.workstation-card {
+  background-color: #12141A;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+  border-radius: 0.875rem;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.workstation-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 36px -8px rgba(0, 0, 0, 0.7);
+}
+
+.workstation-card-interactive {
+  background-color: #12141A;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px -6px rgba(0, 0, 0, 0.5);
+  border-radius: 0.875rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workstation-card-interactive:hover {
+  border-color: rgba(255, 59, 48, 0.4);
+  transform: translateY(-3px);
+  box-shadow: inset 0 1px 0 rgba(255, 59, 48, 0.15), 0 16px 32px -6px rgba(255, 59, 48, 0.15);
+}
+
+.workstation-surface {
+  background-color: #12141A;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workstation-panel {
+  background-color: #181B23;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workstation-band {
+  background-color: #12141A;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Number-First Financial Hierarchy */
+.font-mono-num {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* Signature Crimson Signal Indicator */
+.signal-line-v {
+  position: relative;
+}
+.signal-line-v::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 3px;
+  background: linear-gradient(180deg, #FF3B30 0%, #E53026 100%);
+  border-radius: 2px;
+}
+
+/* Tactile Pill Badges */
+.tactile-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+}
+
+/* Tactile Primary Button */
+.btn-editorial-primary {
+  background: linear-gradient(180deg, #FF3B30 0%, #E53026 100%);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 4px 14px rgba(255, 59, 48, 0.35);
+  transition: all 0.15s ease;
+}
+.btn-editorial-primary:hover {
+  background: linear-gradient(180deg, #FF4F45 0%, #ED382E 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 20px rgba(255, 59, 48, 0.45);
+  transform: translateY(-1px);
+}
+.btn-editorial-primary:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Light mode utility overrides for homepage components */
+html[data-theme="light"] {
+  --text-heading: #111111;
+  --text-white: #111111;
+}
+
+html[data-theme="light"] h1,
+html[data-theme="light"] h2,
+html[data-theme="light"] h3,
+html[data-theme="light"] h4 {
+  color: #111111 !important;
+}
+
+html[data-theme="light"] .font-serif-editorial {
+  color: #374151 !important;
+}
+
+html[data-theme="light"] .font-serif-editorial.text-\[\#FF3B30\] {
+  color: #E53835 !important;
+}
+
+html[data-theme="light"] .bg-\[\#0A0B0E\] {
+  background-color: #F8F9FA !important;
+}
+
+html[data-theme="light"] .bg-\[\#12141A\] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html[data-theme="light"] .bg-\[\#181B23\] {
+  background-color: #F3F4F6 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html[data-theme="light"] .border-white\/\[0\.08\],
+html[data-theme="light"] .border-white\/\[0\.06\],
+html[data-theme="light"] .border-white\/\[0\.1\],
+html[data-theme="light"] .border-white\/\[0\.04\] {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html[data-theme="light"] .text-neutral-200,
+html[data-theme="light"] .text-neutral-300 {
+  color: #1F2937 !important;
+}
+
+html[data-theme="light"] .text-neutral-400 {
+  color: #4B5563 !important;
+}
+
+html[data-theme="light"] .text-neutral-500 {
+  color: #6B7280 !important;
+}
+
+html[data-theme="light"] .text-white {
+  color: #111111 !important;
+}
+
+html[data-theme="light"] .btn-editorial-primary {
+  color: #FFFFFF !important;
+}
+
+html[data-theme="light"] .bg-white\/\[0\.02\],
+html[data-theme="light"] .bg-white\/\[0\.03\],
+html[data-theme="light"] .bg-white\/\[0\.04\],
+html[data-theme="light"] .bg-white\/\[0\.05\],
+html[data-theme="light"] .bg-white\/\[0\.06\] {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+html[data-theme="light"] .bg-\[\#09090b\],
+html[data-theme="light"] .bg-\[\#0c0c0e\],
+html[data-theme="light"] .bg-\[\#121215\],
+html[data-theme="light"] .bg-\[\#181B23\]\/70,
+html[data-theme="light"] .bg-\[\#181B23\]\/60,
+html[data-theme="light"] .bg-\[\#181B23\]\/80 {
+  background-color: #F8F9FA !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html[data-theme="light"] .border-\[\#27272a\],
+html[data-theme="light"] .divide-\[\#27272a\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html[data-theme="light"] table tbody tr {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html[data-theme="light"] table thead {
+  background-color: #F3F4F6 !important;
+  color: #374151 !important;
+}
+
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #272A34 #0A0B0E;
+}
+
+/* Shared dashboard glass language. Apply it to workstation surfaces and the
+   legacy dark panels used across the operational routes, while leaving action
+   buttons and form controls crisp and solid. */
+.workstation-main {
+  background-image:
+    radial-gradient(circle at 90% 0%, rgba(255, 59, 48, 0.06), transparent 24rem),
+    radial-gradient(circle at 8% 22%, rgba(59, 130, 246, 0.04), transparent 22rem);
+}
+
+.workstation-main .workstation-card,
+.workstation-main .workstation-card-interactive,
+.workstation-main .workstation-panel,
+.workstation-main .workstation-surface,
+.workstation-main [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-[#050505"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-black"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.workstation-main .workstation-card-interactive,
+.workstation-main [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea) {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.workstation-main .workstation-card-interactive:hover,
+.workstation-main .workstation-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 59, 48, 0.3) !important;
+}
+
+html[data-theme="light"] .workstation-main .workstation-card,
+html[data-theme="light"] .workstation-main .workstation-card-interactive,
+html[data-theme="light"] .workstation-main .workstation-panel,
+html[data-theme="light"] .workstation-main .workstation-surface,
+html[data-theme="light"] .workstation-main [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .workstation-main [class*="bg-[#050505"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .workstation-main [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .workstation-main [class*="bg-black"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(241, 245, 249, 0.66)) !important;
+  border-color: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Second-level surfaces used by older dashboard routes. */
+.workstation-main [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-[#181B23"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-zinc-950"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-neutral-900"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-neutral-950"]:not(button):not(input):not(select):not(textarea),
+.workstation-shell .workstation-card,
+.workstation-shell .workstation-panel {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+}
+
+.workstation-main input,
+.workstation-main select,
+.workstation-main textarea {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.workstation-sidebar,
+.workstation-mobile-bar,
+.workstation-command-status {
+  -webkit-backdrop-filter: blur(20px) saturate(135%);
+  backdrop-filter: blur(20px) saturate(135%);
+}
+
+.workstation-sidebar {
+  box-shadow: 18px 0 45px rgba(0, 0, 0, 0.14) !important;
+}
+
+.workstation-main table thead {
+  background: rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+html[data-theme="light"] .workstation-main [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .workstation-main [class*="bg-[#181B23"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .workstation-main [class*="bg-zinc-950"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .workstation-main [class*="bg-neutral-900"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .workstation-main [class*="bg-neutral-950"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .workstation-shell .workstation-card,
+html[data-theme="light"] .workstation-shell .workstation-panel {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(241, 245, 249, 0.62)) !important;
+  border-color: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+}
+
+html[data-theme="light"] .workstation-main input,
+html[data-theme="light"] .workstation-main select,
+html[data-theme="light"] .workstation-main textarea {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+}
+
+html[data-theme="light"] .workstation-main table thead {
+  background: rgba(241, 245, 249, 0.78) !important;
+}
+
+/* Command Center-specific glass hierarchy. */
+.dashboard-page .dashboard-command-header {
+  background:
+    radial-gradient(circle at 88% 10%, rgba(255, 59, 48, 0.12), transparent 16rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 24px 55px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(145%);
+}
+
+.dashboard-page .dashboard-mode-switcher {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 18px rgba(0, 0, 0, 0.14);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.dashboard-page .workstation-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.028)) !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.dashboard-page .workstation-card:hover {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.dashboard-page .dashboard-management-panel {
+  background:
+    radial-gradient(circle at 90% 50%, rgba(255, 59, 48, 0.1), transparent 18rem),
+    linear-gradient(100deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+}
+
+.dashboard-page table {
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+}
+
+html[data-theme="light"] .dashboard-page .dashboard-command-header,
+html[data-theme="light"] .dashboard-page .dashboard-mode-switcher,
+html[data-theme="light"] .dashboard-page .workstation-card,
+html[data-theme="light"] .dashboard-page .dashboard-management-panel {
+  background:
+    radial-gradient(circle at 90% 8%, rgba(255, 59, 48, 0.08), transparent 15rem),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.66)) !important;
+  border-color: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.96) !important;
+}
+
+/* Onboarding wizard glass system. */
+.onboarding-page {
+  background-image:
+    radial-gradient(circle at 78% 10%, rgba(255, 59, 48, 0.12), transparent 24rem),
+    radial-gradient(circle at 8% 80%, rgba(59, 130, 246, 0.05), transparent 22rem);
+}
+
+.onboarding-header {
+  padding-inline: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.onboarding-page .workstation-card,
+.onboarding-page .onboarding-welcome,
+.onboarding-page [class*="bg-neutral-900"]:not(button):not(input):not(select):not(textarea),
+.onboarding-page [class*="bg-[#12141A"]:not(button):not(input):not(select):not(textarea),
+.onboarding-page [class*="bg-[#181B23"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.onboarding-stepper {
+  border-radius: 1.15rem;
+}
+
+.onboarding-step {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.onboarding-step:hover {
+  transform: translateX(2px);
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+
+.onboarding-page input,
+.onboarding-page select,
+.onboarding-page textarea {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+html[data-theme="light"] .onboarding-page {
+  background-image:
+    radial-gradient(circle at 78% 10%, rgba(255, 59, 48, 0.08), transparent 24rem),
+    radial-gradient(circle at 8% 80%, rgba(59, 130, 246, 0.04), transparent 22rem);
+}
+
+html[data-theme="light"] .onboarding-header {
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+html[data-theme="light"] .onboarding-page .workstation-card,
+html[data-theme="light"] .onboarding-page .onboarding-welcome,
+html[data-theme="light"] .onboarding-page [class*="bg-neutral-900"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .onboarding-page [class*="bg-[#12141A"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .onboarding-page [class*="bg-[#181B23"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.68)) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+  color: #0f172a !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.98) !important;
+}
+
+html[data-theme="light"] .onboarding-page input,
+html[data-theme="light"] .onboarding-page select,
+html[data-theme="light"] .onboarding-page textarea {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  color: #0f172a !important;
+}
+
+/* Receivables ledger glass hierarchy. */
+.receivables-page .receivables-header,
+.receivables-page .workstation-card,
+.receivables-page .workstation-card-interactive {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.receivables-page .receivables-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.receivables-page .receivables-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: #ff3b30;
+}
+
+.receivables-aging-grid .workstation-card-interactive {
+  border-radius: 0.85rem;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.receivables-aging-grid .workstation-card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 59, 48, 0.45) !important;
+}
+
+.receivables-page .receivables-ledger {
+  border-radius: 1rem;
+}
+
+.receivables-page .receivables-ledger thead {
+  background: rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.receivables-page .receivables-ledger tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.receivables-page .receivables-ledger tbody tr:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme="light"] .receivables-page .receivables-header,
+html[data-theme="light"] .receivables-page .workstation-card,
+html[data-theme="light"] .receivables-page .workstation-card-interactive {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.68)) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.98) !important;
+}
+
+html[data-theme="light"] .receivables-page .receivables-ledger thead {
+  background: rgba(241, 245, 249, 0.78) !important;
+}
+
+html[data-theme="light"] .receivables-page .receivables-ledger tbody tr:hover {
+  background: rgba(226, 232, 240, 0.5) !important;
+}
+
+/* Cash Unblock glass hierarchy. */
+.cash-unblock-page .cash-unblock-header,
+.cash-unblock-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+.cash-unblock-page [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea),
+.cash-unblock-page [class*="bg-[#0d0d11"]:not(button):not(input):not(select):not(textarea),
+.cash-unblock-page .cash-unblock-metrics > * {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.cash-unblock-page .cash-unblock-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.cash-unblock-page .cash-unblock-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: #ff3b30;
+}
+
+.cash-unblock-page .cash-unblock-metrics > * {
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.cash-unblock-page .cash-unblock-drawer-panel {
+  background: linear-gradient(145deg, rgba(20, 22, 30, 0.9), rgba(10, 11, 14, 0.92)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(145%);
+  backdrop-filter: blur(28px) saturate(145%);
+}
+
+.cash-unblock-page input,
+.cash-unblock-page select {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+html[data-theme="light"] .cash-unblock-page .cash-unblock-header,
+html[data-theme="light"] .cash-unblock-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .cash-unblock-page [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .cash-unblock-page [class*="bg-[#0d0d11"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .cash-unblock-page .cash-unblock-metrics > * {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.68)) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.98) !important;
+}
+
+html[data-theme="light"] .cash-unblock-page .cash-unblock-drawer-panel {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.9)) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="light"] .cash-unblock-page input,
+html[data-theme="light"] .cash-unblock-page select {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  color: #0f172a !important;
+}
+
+/* Customer 360 glass hierarchy. */
+.customers-page .customers-header,
+.customers-page .customers-toolbar,
+.customers-page .customers-directory,
+.customers-page .workstation-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.customers-page .customers-header {
+  position: relative;
+}
+
+.customers-page .customers-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: #ff3b30;
+}
+
+.customers-page .customers-toolbar {
+  border-radius: 1rem;
+}
+
+.customers-page .customers-toolbar input {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.customers-page .customers-directory {
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.customers-page .customers-directory thead {
+  background: rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.customers-page .customers-directory tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.customers-page .customers-directory tbody tr:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme="light"] .customers-page .customers-header,
+html[data-theme="light"] .customers-page .customers-toolbar,
+html[data-theme="light"] .customers-page .customers-directory,
+html[data-theme="light"] .customers-page .workstation-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.68)) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.98) !important;
+}
+
+html[data-theme="light"] .customers-page .customers-toolbar input {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .customers-page .customers-directory thead {
+  background: rgba(241, 245, 249, 0.78) !important;
+}
+
+html[data-theme="light"] .customers-page .customers-directory tbody tr:hover {
+  background: rgba(226, 232, 240, 0.5) !important;
+}
+
+/* Exception incident room glass hierarchy. */
+.exceptions-page .exceptions-header,
+.exceptions-page .exceptions-empty,
+.exceptions-page .workstation-card,
+.exceptions-page .workstation-card-interactive {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.exceptions-page .exceptions-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.exceptions-page .exceptions-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: #ff3b30;
+}
+
+.exceptions-page .exceptions-empty {
+  border-radius: 1rem;
+  padding-block: 3rem !important;
+}
+
+.exceptions-page .exceptions-empty::before {
+  content: '✓';
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0 auto 0.75rem;
+  border-radius: 999px;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+html[data-theme="light"] .exceptions-page .exceptions-header,
+html[data-theme="light"] .exceptions-page .exceptions-empty,
+html[data-theme="light"] .exceptions-page .workstation-card,
+html[data-theme="light"] .exceptions-page .workstation-card-interactive {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.68)) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.98) !important;
+}
+
+/* Collections recovery glass hierarchy. */
+.collections-page .collections-header,
+.collections-page .workstation-card,
+.collections-page .workstation-card-interactive {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.collections-page .collections-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.collections-page .collections-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: #ff3b30;
+}
+
+.collections-page .workstation-card {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.collections-page .workstation-card:hover {
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+
+html[data-theme="light"] .collections-page .collections-header,
+html[data-theme="light"] .collections-page .workstation-card,
+html[data-theme="light"] .collections-page .workstation-card-interactive {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.68)) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.98) !important;
+}
+
+/* Payments and reconciliation glass hierarchy. */
+.payments-page .payments-unmatched,
+.payments-page .payments-controls,
+.payments-page .payments-ledger,
+.payments-page .workstation-card,
+.payments-page .payments-metrics > .relative,
+.payments-page .payments-metrics > div > .relative {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.payments-page .payments-unmatched,
+.payments-page .payments-controls,
+.payments-page .payments-ledger {
+  border-radius: 1rem;
+}
+
+.payments-page .payments-unmatched {
+  position: relative;
+  overflow: hidden;
+}
+
+.payments-page .payments-unmatched::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: #ff3b30;
+}
+
+.payments-page .payments-ledger {
+  overflow: hidden;
+}
+
+.payments-page .payments-ledger thead {
+  background: rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.payments-page .payments-ledger tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.payments-page .payments-ledger tbody tr:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.payments-page input,
+.payments-page select {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+html[data-theme="light"] .payments-page .payments-unmatched,
+html[data-theme="light"] .payments-page .payments-controls,
+html[data-theme="light"] .payments-page .payments-ledger,
+html[data-theme="light"] .payments-page .workstation-card,
+html[data-theme="light"] .payments-page .payments-metrics > .relative,
+html[data-theme="light"] .payments-page .payments-metrics > div > .relative {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.68)) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.98) !important;
+}
+
+html[data-theme="light"] .payments-page .payments-ledger thead {
+  background: rgba(241, 245, 249, 0.78) !important;
+}
+
+html[data-theme="light"] .payments-page .payments-ledger tbody tr:hover {
+  background: rgba(226, 232, 240, 0.5) !important;
+}
+
+html[data-theme="light"] .payments-page input,
+html[data-theme="light"] .payments-page select {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  color: #0f172a !important;
+}
+
+/* Landing page glass system: use a few intentional layers so the page feels
+   dimensional without turning every small badge into a translucent blob. */
+.landing-shell {
+  background-image:
+    radial-gradient(circle at 76% 8%, rgba(239, 68, 68, 0.16), transparent 30rem),
+    radial-gradient(circle at 12% 38%, rgba(59, 130, 246, 0.06), transparent 26rem),
+    linear-gradient(180deg, #07080b 0%, #090b10 52%, #07080b 100%);
+}
+
+.landing-shell > header,
+.landing-shell header {
+  background: rgba(7, 8, 11, 0.62) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.16);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  backdrop-filter: blur(22px) saturate(145%);
+}
+
+.landing-shell .workstation-card,
+.landing-shell .workstation-card-interactive,
+.landing-shell [class*="bg-[#12141A"],
+.landing-shell [class*="bg-[#12141E"],
+.landing-shell [class*="bg-[#0D0F16"],
+.landing-shell [class*="bg-[#0E1017"],
+.landing-shell [class*="bg-[#0B0D12"],
+.landing-shell [class*="bg-[#11141B"] {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.landing-shell .workstation-card-interactive,
+.landing-shell [class*="bg-[#12141A"] {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.landing-shell .workstation-card-interactive:hover,
+.landing-shell [class*="bg-[#12141A"]:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.landing-shell [class*="bg-white/[0.02]"],
+.landing-shell [class*="bg-white/[0.03]"],
+.landing-shell [class*="bg-white/[0.04]"] {
+  background: rgba(255, 255, 255, 0.045) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.landing-shell .landing-shell section {
+  isolation: isolate;
+}
+
+/* Investigations glass hierarchy: keep evidence readable while giving the workspace a calmer depth. */
+.investigations-page .investigations-header,
+.investigations-page .investigations-launcher,
+.investigations-page .investigations-evidence,
+.investigations-page .investigations-resolution,
+.investigations-page .workstation-card,
+.investigations-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+.investigations-page [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.investigations-page .investigations-header,
+.investigations-page .investigations-launcher,
+.investigations-page .investigations-evidence,
+.investigations-page .investigations-resolution,
+.investigations-page .investigations-loading {
+  border-radius: 1rem;
+}
+
+.investigations-page .investigations-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.investigations-page .investigations-header::before {
+  background: linear-gradient(180deg, #ff3b30, rgba(255, 59, 48, 0.2));
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 1px;
+}
+
+.investigations-page input,
+.investigations-page select {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f8fafc !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.investigations-page option {
+  background: #18181b;
+  color: #f8fafc;
+}
+
+.investigations-page .investigations-evidence,
+.investigations-page .investigations-resolution {
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme="light"] .investigations-page .investigations-header,
+html[data-theme="light"] .investigations-page .investigations-launcher,
+html[data-theme="light"] .investigations-page .investigations-evidence,
+html[data-theme="light"] .investigations-page .investigations-resolution,
+html[data-theme="light"] .investigations-page .workstation-card,
+html[data-theme="light"] .investigations-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .investigations-page [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.78)) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+html[data-theme="light"] .investigations-page input,
+html[data-theme="light"] .investigations-page select {
+  background: rgba(255, 255, 255, 0.82) !important;
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .investigations-page option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .investigations-page .investigations-header::before {
+  background: linear-gradient(180deg, #ef4444, rgba(239, 68, 68, 0.2));
+}
+
+/* Agents glass hierarchy. */
+.agents-page {
+  isolation: isolate;
+}
+
+.agents-page .agents-roster,
+.agents-page .agents-dossier,
+.agents-page .agents-audit,
+.agents-page .workstation-card,
+.agents-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+.agents-page [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  border-radius: 1rem;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.agents-page .agents-roster,
+.agents-page .agents-dossier,
+.agents-page .agents-audit {
+  overflow: hidden;
+}
+
+.agents-page .agents-roster thead {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.agents-page .agents-roster tbody tr {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.agents-page .agents-roster tbody tr:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+  box-shadow: inset 3px 0 0 rgba(255, 59, 48, 0.8);
+}
+
+.agents-page .agents-roster tbody tr > td,
+.agents-page .agents-roster thead tr > th {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.agents-page .agents-dossier > div:not(:first-child),
+.agents-page .agents-audit > div:not(:first-child) {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.agents-page .agents-dossier [class*="bg-zinc-900"],
+.agents-page .agents-audit [class*="bg-zinc-900"] {
+  background: rgba(255, 255, 255, 0.055) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.agents-page button:not([disabled]) {
+  border-radius: 0.65rem;
+}
+
+html[data-theme="light"] .agents-page .agents-roster,
+html[data-theme="light"] .agents-page .agents-dossier,
+html[data-theme="light"] .agents-page .agents-audit,
+html[data-theme="light"] .agents-page .workstation-card,
+html[data-theme="light"] .agents-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .agents-page [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.78)) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+html[data-theme="light"] .agents-page .agents-roster thead {
+  background: rgba(241, 245, 249, 0.8) !important;
+}
+
+html[data-theme="light"] .agents-page .agents-roster tbody tr:hover {
+  background: rgba(241, 245, 249, 0.72) !important;
+}
+
+html[data-theme="light"] .agents-page .agents-roster tbody tr > td,
+html[data-theme="light"] .agents-page .agents-roster thead tr > th,
+html[data-theme="light"] .agents-page .agents-dossier > div:not(:first-child),
+html[data-theme="light"] .agents-page .agents-audit > div:not(:first-child) {
+  border-color: rgba(148, 163, 184, 0.24) !important;
+}
+
+html[data-theme="light"] .agents-page .agents-dossier [class*="bg-zinc-900"],
+html[data-theme="light"] .agents-page .agents-audit [class*="bg-zinc-900"] {
+  background: rgba(248, 250, 252, 0.82) !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+}
+
+/* Causal graph glass hierarchy: the graph stays dominant while supporting analysis recedes into depth. */
+.causal-graph-page {
+  isolation: isolate;
+}
+
+.causal-graph-page .causal-graph-header,
+.causal-graph-page .causal-graph-health,
+.causal-graph-page .causal-graph-toolbar,
+.causal-graph-page .causal-graph-canvas,
+.causal-graph-page .causal-graph-intelligence,
+.causal-graph-page .causal-graph-queue,
+.causal-graph-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+.causal-graph-page [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea),
+.causal-graph-page [class*="bg-[#0d0d11"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.causal-graph-page .causal-graph-header,
+.causal-graph-page .causal-graph-health,
+.causal-graph-page .causal-graph-toolbar,
+.causal-graph-page .causal-graph-canvas,
+.causal-graph-page .causal-graph-intelligence,
+.causal-graph-page .causal-graph-queue {
+  border-radius: 1rem;
+}
+
+.causal-graph-page .causal-graph-header,
+.causal-graph-page .causal-graph-health {
+  position: relative;
+  overflow: hidden;
+}
+
+.causal-graph-page .causal-graph-header::before,
+.causal-graph-page .causal-graph-health::before {
+  background: linear-gradient(180deg, #ff3b30, rgba(255, 59, 48, 0.18));
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 1px;
+}
+
+.causal-graph-page .causal-graph-toolbar input,
+.causal-graph-page .causal-graph-toolbar select {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f8fafc !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.causal-graph-page .causal-graph-canvas > div:last-child {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.causal-graph-page .causal-graph-queue tbody tr {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.causal-graph-page .causal-graph-queue tbody tr:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+  box-shadow: inset 3px 0 0 rgba(255, 59, 48, 0.8);
+}
+
+html[data-theme="light"] .causal-graph-page .causal-graph-header,
+html[data-theme="light"] .causal-graph-page .causal-graph-health,
+html[data-theme="light"] .causal-graph-page .causal-graph-toolbar,
+html[data-theme="light"] .causal-graph-page .causal-graph-canvas,
+html[data-theme="light"] .causal-graph-page .causal-graph-intelligence,
+html[data-theme="light"] .causal-graph-page .causal-graph-queue,
+html[data-theme="light"] .causal-graph-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .causal-graph-page [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .causal-graph-page [class*="bg-[#0d0d11"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.78)) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+html[data-theme="light"] .causal-graph-page .causal-graph-toolbar input,
+html[data-theme="light"] .causal-graph-page .causal-graph-toolbar select {
+  background: rgba(255, 255, 255, 0.84) !important;
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .causal-graph-page .causal-graph-toolbar option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .causal-graph-page .causal-graph-header::before,
+html[data-theme="light"] .causal-graph-page .causal-graph-health::before {
+  background: linear-gradient(180deg, #ef4444, rgba(239, 68, 68, 0.2));
+}
+
+html[data-theme="light"] .causal-graph-page .causal-graph-queue tbody tr:hover {
+  background: rgba(241, 245, 249, 0.72) !important;
+}
+
+/* CFO glass hierarchy: make the executive view feel layered without competing with its numbers. */
+.cfo-page {
+  isolation: isolate;
+}
+
+.cfo-page .cfo-header,
+.cfo-page .cfo-financial-band,
+.cfo-page .cfo-trend-list,
+.cfo-page .cfo-category-grid > div,
+.cfo-page .cfo-customer-table,
+.cfo-page .cfo-attention-grid > div,
+.cfo-page .workstation-card,
+.cfo-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+.cfo-page [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.19), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.cfo-page .cfo-header,
+.cfo-page .cfo-financial-band,
+.cfo-page .cfo-customer-table,
+.cfo-page .cfo-category-grid > div,
+.cfo-page .cfo-attention-grid > div {
+  border-radius: 1rem;
+}
+
+.cfo-page .cfo-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.cfo-page .cfo-header::before {
+  background: linear-gradient(180deg, #ff3b30, rgba(255, 59, 48, 0.18));
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 1px;
+}
+
+.cfo-page .cfo-financial-band > div {
+  background: rgba(255, 255, 255, 0.035) !important;
+}
+
+.cfo-page .cfo-trend-list {
+  box-shadow: none !important;
+}
+
+.cfo-page .cfo-category-grid > div,
+.cfo-page .cfo-attention-grid > div {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.cfo-page .cfo-category-grid > div:hover,
+.cfo-page .cfo-attention-grid > div:hover {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-2px);
+}
+
+.cfo-page .cfo-customer-table thead {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.cfo-page .cfo-customer-table tbody tr {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.cfo-page .cfo-customer-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+  box-shadow: inset 3px 0 0 rgba(255, 59, 48, 0.8);
+}
+
+html[data-theme="light"] .cfo-page .cfo-header,
+html[data-theme="light"] .cfo-page .cfo-financial-band,
+html[data-theme="light"] .cfo-page .cfo-trend-list,
+html[data-theme="light"] .cfo-page .cfo-category-grid > div,
+html[data-theme="light"] .cfo-page .cfo-customer-table,
+html[data-theme="light"] .cfo-page .cfo-attention-grid > div,
+html[data-theme="light"] .cfo-page .workstation-card,
+html[data-theme="light"] .cfo-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .cfo-page [class*="bg-[#121215"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.78)) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+html[data-theme="light"] .cfo-page .cfo-financial-band > div {
+  background: rgba(255, 255, 255, 0.58) !important;
+}
+
+html[data-theme="light"] .cfo-page .cfo-customer-table thead {
+  background: rgba(241, 245, 249, 0.78) !important;
+}
+
+html[data-theme="light"] .cfo-page .cfo-customer-table tbody tr:hover {
+  background: rgba(241, 245, 249, 0.72) !important;
+}
+
+html[data-theme="light"] .cfo-page .cfo-header::before {
+  background: linear-gradient(180deg, #ef4444, rgba(239, 68, 68, 0.2));
+}
+
+/* Reports glass hierarchy: separate discovery, index, and preview so the active report is easy to scan. */
+.reports-page {
+  isolation: isolate;
+}
+
+.reports-page .reports-header,
+.reports-page .report-metrics,
+.reports-page .reports-selector,
+.reports-page .reports-index,
+.reports-page .reports-preview,
+.reports-page .workstation-card,
+.reports-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+.reports-page [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea),
+.reports-page [class*="bg-zinc-950"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.19), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.reports-page .reports-header {
+  position: relative;
+  overflow: hidden;
+  padding-bottom: 0.9rem;
+}
+
+.reports-page .reports-header::before {
+  background: linear-gradient(180deg, #ff3b30, rgba(255, 59, 48, 0.18));
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 1px;
+}
+
+.reports-page .report-metrics {
+  border-radius: 1rem;
+  padding: 0.85rem;
+}
+
+.reports-page .reports-selector,
+.reports-page .reports-index,
+.reports-page .reports-preview {
+  border-radius: 1rem;
+}
+
+.reports-page .reports-selector input {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f8fafc !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.reports-page .reports-index > div:last-child {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.reports-page .reports-index button:not([class*="bg-[#FF2D2D"]) {
+  border-radius: 0.75rem;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.reports-page .reports-index button:not([class*="bg-[#FF2D2D"]):hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  transform: translateX(2px);
+}
+
+.reports-page .reports-preview > div:last-child,
+.reports-page .reports-preview table {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.reports-page .reports-preview thead {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.reports-page .reports-preview tbody tr {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.reports-page .reports-preview tbody tr:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+  box-shadow: inset 3px 0 0 rgba(255, 59, 48, 0.8);
+}
+
+html[data-theme="light"] .reports-page .reports-header,
+html[data-theme="light"] .reports-page .report-metrics,
+html[data-theme="light"] .reports-page .reports-selector,
+html[data-theme="light"] .reports-page .reports-index,
+html[data-theme="light"] .reports-page .reports-preview,
+html[data-theme="light"] .reports-page .workstation-card,
+html[data-theme="light"] .reports-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .reports-page [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .reports-page [class*="bg-zinc-950"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.78)) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+html[data-theme="light"] .reports-page .reports-selector input {
+  background: rgba(255, 255, 255, 0.84) !important;
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .reports-page .reports-index button:not([class*="bg-[#FF2D2D"]):hover {
+  background: rgba(241, 245, 249, 0.72) !important;
+  border-color: rgba(148, 163, 184, 0.38) !important;
+}
+
+html[data-theme="light"] .reports-page .reports-preview thead {
+  background: rgba(241, 245, 249, 0.78) !important;
+}
+
+html[data-theme="light"] .reports-page .reports-preview tbody tr:hover {
+  background: rgba(241, 245, 249, 0.72) !important;
+}
+
+html[data-theme="light"] .reports-page .reports-header::before {
+  background: linear-gradient(180deg, #ef4444, rgba(239, 68, 68, 0.2));
+}
+
+/* Integrations glass hierarchy: connection health first, connector actions second. */
+.integrations-page {
+  isolation: isolate;
+}
+
+.integrations-page .integrations-header,
+.integrations-page .integrations-metrics,
+.integrations-page .integrations-insight,
+.integrations-page .integrations-status-panel,
+.integrations-page .integrations-tabs,
+.integrations-page .integrations-card,
+.integrations-page .integrations-history,
+.integrations-page .integrations-errors,
+.integrations-page .integrations-pipeline,
+.integrations-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+.integrations-page [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.19), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.integrations-page .integrations-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.integrations-page .integrations-header::before {
+  background: linear-gradient(180deg, #ff3b30, rgba(255, 59, 48, 0.18));
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 1px;
+}
+
+.integrations-page .integrations-metrics,
+.integrations-page .integrations-insight,
+.integrations-page .integrations-status-panel,
+.integrations-page .integrations-tabs,
+.integrations-page .integrations-card,
+.integrations-page .integrations-history,
+.integrations-page .integrations-errors,
+.integrations-page .integrations-pipeline {
+  border-radius: 1rem;
+}
+
+.integrations-page .integrations-card {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.integrations-page .integrations-card:hover {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-2px);
+}
+
+.integrations-page .integrations-card [class*="bg-zinc-900"],
+.integrations-page .integrations-pipeline [class*="bg-zinc-900"],
+.integrations-page .integrations-errors [class*="bg-zinc-900"] {
+  background: rgba(255, 255, 255, 0.055) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.integrations-page .integrations-history thead {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.integrations-page .integrations-history tbody tr {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.integrations-page .integrations-history tbody tr:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+  box-shadow: inset 3px 0 0 rgba(255, 59, 48, 0.8);
+}
+
+html[data-theme="light"] .integrations-page .integrations-header,
+html[data-theme="light"] .integrations-page .integrations-metrics,
+html[data-theme="light"] .integrations-page .integrations-insight,
+html[data-theme="light"] .integrations-page .integrations-status-panel,
+html[data-theme="light"] .integrations-page .integrations-tabs,
+html[data-theme="light"] .integrations-page .integrations-card,
+html[data-theme="light"] .integrations-page .integrations-history,
+html[data-theme="light"] .integrations-page .integrations-errors,
+html[data-theme="light"] .integrations-page .integrations-pipeline,
+html[data-theme="light"] .integrations-page [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .integrations-page [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.78)) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+html[data-theme="light"] .integrations-page .integrations-card [class*="bg-zinc-900"],
+html[data-theme="light"] .integrations-page .integrations-pipeline [class*="bg-zinc-900"],
+html[data-theme="light"] .integrations-page .integrations-errors [class*="bg-zinc-900"] {
+  background: rgba(248, 250, 252, 0.82) !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+}
+
+html[data-theme="light"] .integrations-page .integrations-history thead {
+  background: rgba(241, 245, 249, 0.78) !important;
+}
+
+html[data-theme="light"] .integrations-page .integrations-history tbody tr:hover {
+  background: rgba(241, 245, 249, 0.72) !important;
+}
+
+html[data-theme="light"] .integrations-page .integrations-header::before {
+  background: linear-gradient(180deg, #ef4444, rgba(239, 68, 68, 0.2));
+}
+
+/* Approvals glass hierarchy: keep the queue and evidence decision surface distinct. */
+.approval-page {
+  isolation: isolate;
+}
+
+.approval-page .approval-header,
+.approval-page .approval-metrics > *,
+.approval-page .approval-queue,
+.approval-page .approval-detail,
+.approval-page .approval-audit,
+.approval-page .approval-role,
+.approval-page [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea),
+.approval-page [class*="bg-zinc-950"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.19), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.approval-page .approval-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.approval-page .approval-header::before {
+  background: linear-gradient(180deg, #ff3b30, rgba(255, 59, 48, 0.18));
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 1px;
+}
+
+.approval-page .approval-metrics > * {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.approval-page .approval-metrics > *:hover {
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-2px);
+}
+
+.approval-page .approval-queue,
+.approval-page .approval-detail,
+.approval-page .approval-audit,
+.approval-page .approval-role,
+.approval-page .approval-tabs {
+  border-radius: 1rem;
+}
+
+.approval-page .approval-queue > div:first-child,
+.approval-page .approval-detail > div:first-child,
+.approval-page .approval-audit > div:first-child {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.approval-page .approval-tabs {
+  background: rgba(255, 255, 255, 0.055) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.approval-page .approval-queue [class*="bg-zinc-950"],
+.approval-page .approval-detail [class*="bg-zinc-900"],
+.approval-page .approval-audit [class*="bg-zinc-900"] {
+  background: rgba(255, 255, 255, 0.055) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.approval-page .approval-queue [class*="bg-zinc-950"] {
+  border-radius: 0.75rem;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.approval-page .approval-queue [class*="bg-zinc-950"]:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  transform: translateX(2px);
+}
+
+.approval-page .approval-empty,
+.approval-page .approval-detail-empty {
+  background: rgba(255, 255, 255, 0.035) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+html[data-theme="light"] .approval-page .approval-header,
+html[data-theme="light"] .approval-page .approval-metrics > *,
+html[data-theme="light"] .approval-page .approval-queue,
+html[data-theme="light"] .approval-page .approval-detail,
+html[data-theme="light"] .approval-page .approval-audit,
+html[data-theme="light"] .approval-page .approval-role,
+html[data-theme="light"] .approval-page [class*="bg-zinc-900"]:not(button):not(input):not(select):not(textarea),
+html[data-theme="light"] .approval-page [class*="bg-zinc-950"]:not(button):not(input):not(select):not(textarea) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.78)) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+html[data-theme="light"] .approval-page .approval-tabs {
+  background: rgba(241, 245, 249, 0.78) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+html[data-theme="light"] .approval-page .approval-queue [class*="bg-zinc-950"],
+html[data-theme="light"] .approval-page .approval-detail [class*="bg-zinc-900"],
+html[data-theme="light"] .approval-page .approval-audit [class*="bg-zinc-900"] {
+  background: rgba(248, 250, 252, 0.82) !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+}
+
+html[data-theme="light"] .approval-page .approval-empty,
+html[data-theme="light"] .approval-page .approval-detail-empty {
+  background: rgba(248, 250, 252, 0.72) !important;
+  border-color: rgba(148, 163, 184, 0.32) !important;
+}
+
+html[data-theme="light"] .approval-page .approval-header::before {
+  background: linear-gradient(180deg, #ef4444, rgba(239, 68, 68, 0.2));
+}
+
+/* Settings glass hierarchy: administration, configuration, and access control stay distinct. */
+.settings-page {
+  isolation: isolate;
+}
+
+.settings-page .settings-header,
+.settings-page .settings-nav,
+.settings-page .settings-shortcuts > *,
+.settings-page .settings-form,
+.settings-page .settings-team-table,
+.settings-page .workstation-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.19), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.settings-page .settings-header {
+  position: relative;
+}
+
+.settings-page .settings-header::before {
+  background: linear-gradient(180deg, #ff3b30, rgba(255, 59, 48, 0.18));
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 1px;
+}
+
+.settings-page .settings-nav {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  padding: 0.35rem;
+}
+
+.settings-page .settings-nav > a,
+.settings-page .settings-nav > button {
+  border-radius: 0.7rem;
+}
+
+.settings-page .settings-shortcuts > * {
+  border-radius: 1rem;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.settings-page .settings-shortcuts > *:hover {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-2px);
+}
+
+.settings-page .settings-form,
+.settings-page .settings-team-table {
+  border-radius: 1rem;
+}
+
+.settings-page .settings-form input,
+.settings-page .settings-form select {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f8fafc !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.settings-page .settings-form option {
+  background: #18181b;
+  color: #f8fafc;
+}
+
+.settings-page .settings-team-table thead {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.settings-page .settings-team-table tbody tr {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.settings-page .settings-team-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+  box-shadow: inset 3px 0 0 rgba(255, 59, 48, 0.8);
+}
+
+html[data-theme="light"] .settings-page .settings-header,
+html[data-theme="light"] .settings-page .settings-nav,
+html[data-theme="light"] .settings-page .settings-shortcuts > *,
+html[data-theme="light"] .settings-page .settings-form,
+html[data-theme="light"] .settings-page .settings-team-table,
+html[data-theme="light"] .settings-page .workstation-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.78)) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+html[data-theme="light"] .settings-page .settings-form input,
+html[data-theme="light"] .settings-page .settings-form select {
+  background: rgba(255, 255, 255, 0.84) !important;
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .settings-page .settings-form option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .settings-page .settings-team-table thead {
+  background: rgba(241, 245, 249, 0.78) !important;
+}
+
+html[data-theme="light"] .settings-page .settings-team-table tbody tr:hover {
+  background: rgba(241, 245, 249, 0.72) !important;
+}
+
+html[data-theme="light"] .settings-page .settings-header::before {
+  background: linear-gradient(180deg, #ef4444, rgba(239, 68, 68, 0.2));
+}
+
+/* Notification settings is a standalone surface, so scope its theme tokens explicitly. */
+.notifications-page {
+  background:
+    radial-gradient(circle at 85% 0%, rgba(255, 59, 48, 0.09), transparent 24rem),
+    #09090b !important;
+}
+
+.notifications-page .notifications-header,
+.notifications-page .notifications-hero,
+.notifications-page .notifications-status,
+.notifications-page .notifications-preferences,
+.notifications-page .notifications-page .notifications-header,
+.notifications-page .relative > button,
+.notifications-page .relative > div[class*="absolute"] {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.notifications-page .notifications-header {
+  position: relative;
+}
+
+.notifications-page .notifications-header::before,
+.notifications-page .notifications-hero::before {
+  background: linear-gradient(180deg, #ff3b30, rgba(255, 59, 48, 0.18));
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 1px;
+}
+
+.notifications-page .notifications-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.notifications-page .notifications-preferences {
+  border-radius: 1.25rem;
+}
+
+.notifications-page .notifications-preferences > div > div {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.notifications-page .notifications-preferences label {
+  color: #e4e4e7;
+}
+
+.notifications-page .notifications-preferences .notification-checkbox {
+  accent-color: #ff3b30;
+}
+
+.notifications-page .notifications-preferences .notification-checkbox:focus-visible {
+  outline: 2px solid rgba(255, 59, 48, 0.7);
+  outline-offset: 2px;
+}
+
+html[data-theme="light"] .notifications-page {
+  background:
+    radial-gradient(circle at 85% 0%, rgba(255, 59, 48, 0.06), transparent 24rem),
+    #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .notifications-page .notifications-header,
+html[data-theme="light"] .notifications-page .notifications-hero,
+html[data-theme="light"] .notifications-page .notifications-status,
+html[data-theme="light"] .notifications-page .notifications-preferences,
+html[data-theme="light"] .notifications-page .relative > button,
+html[data-theme="light"] .notifications-page .relative > div[class*="absolute"] {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.8)) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+html[data-theme="light"] .notifications-page .notifications-header,
+html[data-theme="light"] .notifications-page .notifications-header *:not(svg),
+html[data-theme="light"] .notifications-page .notifications-hero,
+html[data-theme="light"] .notifications-page .notifications-hero *:not(svg),
+html[data-theme="light"] .notifications-page .notifications-status,
+html[data-theme="light"] .notifications-page .notifications-preferences,
+html[data-theme="light"] .notifications-page .notifications-preferences h3,
+html[data-theme="light"] .notifications-page .notifications-preferences label {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .notifications-page .notifications-header .text-neutral-400,
+html[data-theme="light"] .notifications-page .notifications-hero .text-neutral-400,
+html[data-theme="light"] .notifications-page .notifications-preferences .text-neutral-400,
+html[data-theme="light"] .notifications-page .notifications-preferences p {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .notifications-page .text-\[\#FF2D2D\] {
+  color: #dc2626 !important;
+}
+
+html[data-theme="light"] .notifications-page .notifications-preferences > div > div {
+  border-color: rgba(148, 163, 184, 0.24) !important;
+}
+
+html[data-theme="light"] .notifications-page .relative > button {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .notifications-page .relative > div[class*="absolute"] * {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .notifications-page .relative > div[class*="absolute"] .text-neutral-400,
+html[data-theme="light"] .notifications-page .relative > div[class*="absolute"] .text-neutral-500 {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .notifications-page .notifications-header::before,
+html[data-theme="light"] .notifications-page .notifications-hero::before {
+  background: linear-gradient(180deg, #ef4444, rgba(239, 68, 68, 0.2));
+}
+
+/* Onboarding connector modal: keep the availability message readable in either theme. */
+.onboarding-connector-overlay {
+  background: rgba(9, 9, 11, 0.72) !important;
+}
+
+.onboarding-connector-modal {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.045)) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(145%);
+}
+
+.onboarding-connector-icon {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: #f8fafc !important;
+}
+
+.onboarding-connector-title {
+  color: #f8fafc !important;
+}
+
+.onboarding-connector-copy {
+  color: #cbd5e1 !important;
+}
+
+.onboarding-connector-close {
+  color: #94a3b8 !important;
+}
+
+.onboarding-connector-close:hover {
+  color: #f8fafc !important;
+}
+
+.onboarding-connector-modal button.bg-\[\#FF2D2D\] {
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .onboarding-connector-overlay {
+  background: rgba(15, 23, 42, 0.28) !important;
+}
+
+html[data-theme="light"] .onboarding-connector-modal {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.9)) !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.96) !important;
+}
+
+html[data-theme="light"] .onboarding-connector-icon {
+  background: rgba(241, 245, 249, 0.9) !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .onboarding-connector-title {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .onboarding-connector-copy {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .onboarding-connector-close {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .onboarding-connector-close:hover {
+  color: #0f172a !important;
+}
+
+/* Whole-product interaction and browser-surface baseline. Keep this shared so
+   every operational route has the same focus, motion, and form behavior. */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid rgba(255, 59, 48, 0.82);
+  outline-offset: 3px;
+}
+
+:where(button, a) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button, input, select, textarea) {
+  font: inherit;
+}
+
+button:not(:disabled),
+a {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background: #12141a;
+  color: #f3f4f6;
+}
+
+html[data-theme="light"] select {
+  color-scheme: light;
+}
+
+html[data-theme="light"] select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.workstation-skip-link {
+  position: fixed;
+  left: 1rem;
+  top: 0.75rem;
+  z-index: 100;
+  transform: translateY(-180%);
+  border: 1px solid rgba(255, 59, 48, 0.55);
+  border-radius: 0.65rem;
+  background: #12141a;
+  color: #ffffff;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+  transition: transform 160ms ease;
+}
+
+.workstation-skip-link:focus {
+  transform: translateY(0);
+}
+
+html[data-theme="light"] .workstation-skip-link {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.workstation-main {
+  min-width: 0;
+  scrollbar-gutter: stable;
+}
+
+.workstation-main :where(table) {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.workstation-main :where(th) {
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .workstation-main {
+    padding-bottom: 5.5rem;
+  }
+
+  .workstation-main :where(h1) {
+    text-wrap: balance;
+  }
+}
+
+/* Landing refinement: align the public experience with the workstation's
+   warm editorial palette. Positive telemetry stays emerald; the structure,
+   controls, and primary signal now share the same crimson/stone language. */
+.landing-shell {
+  --landing-surface: rgba(20, 22, 27, 0.78);
+  --landing-surface-strong: rgba(24, 27, 35, 0.9);
+  --landing-border: rgba(255, 255, 255, 0.12);
+  background-image:
+    radial-gradient(ellipse at 78% 4%, rgba(255, 59, 48, 0.13), transparent 32%),
+    radial-gradient(ellipse at 8% 34%, rgba(245, 158, 11, 0.045), transparent 28%),
+    linear-gradient(180deg, #090a0d 0%, #0b0d11 52%, #090a0d 100%) !important;
+}
+
+.landing-shell :where(
+  [class*="bg-[#12141A"],
+  [class*="bg-[#12141C"],
+  [class*="bg-[#12141E"],
+  [class*="bg-[#0E1017"],
+  [class*="bg-[#0D0F16"],
+  [class*="bg-[#11141B"]
+) {
+  background: var(--landing-surface) !important;
+  border-color: var(--landing-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(132%);
+  backdrop-filter: blur(18px) saturate(132%);
+}
+
+.landing-shell :where(
+  [class*="bg-emerald-400/[0.08]"],
+  [class*="bg-emerald-500/10"]
+) {
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
+.landing-shell :where(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.landing-shell :where(p) {
+  text-wrap: pretty;
+}
+
+.landing-shell :where(button, a):focus-visible {
+  outline: 2px solid #ff5a52;
+  outline-offset: 3px;
+}
+
+.landing-shell :where(button, a[class*="rounded-xl"]):not([aria-hidden="true"]):hover {
+  box-shadow: 0 14px 30px rgba(255, 59, 48, 0.16);
+}
+
+html[data-theme="light"] .landing-shell {
+  --landing-surface: rgba(255, 255, 255, 0.82);
+  --landing-surface-strong: rgba(255, 255, 255, 0.96);
+  --landing-border: rgba(15, 23, 42, 0.12);
+  background-image:
+    radial-gradient(ellipse at 78% 4%, rgba(229, 56, 53, 0.08), transparent 32%),
+    linear-gradient(180deg, #f8fafc 0%, #f3f4f6 52%, #f8fafc 100%) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .landing-shell :where([class*="text-white"], [class*="text-neutral-200"], [class*="text-neutral-300"]) {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .landing-shell :where([class*="text-neutral-400"], [class*="text-neutral-500"]) {
+  color: #475569 !important;
+}
+
+@media (max-width: 640px) {
+  .landing-shell :where(h1) {
+    font-size: clamp(2.65rem, 12vw, 4rem);
+    line-height: 0.98;
+  }
+
+  .landing-shell :where(section) {
+    scroll-margin-top: 4.5rem;
+  }
+}
+
+/* Landing-page craft pass: one material language for the persuasive surface,
+   with stronger hierarchy around the product proof and primary actions. */
+.landing-shell :where(button, a):focus-visible {
+  outline: 2px solid rgba(255, 90, 82, 0.9);
+  outline-offset: 3px;
+}
+
+.landing-skip-link {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  z-index: 100;
+  transform: translateY(-160%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.75rem;
+  background: rgba(18, 20, 26, 0.94);
+  color: #fff;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+  transition: transform 160ms ease;
+}
+
+.landing-skip-link:focus {
+  transform: translateY(0);
+}
+
+.landing-shell > header :where(button, a),
+.landing-shell main :where(button, a) {
+  min-height: 2.75rem;
+}
+
+.landing-shell nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-shell :where(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.landing-shell :where(p, li, blockquote) {
+  text-wrap: pretty;
+}
+
+.landing-shell .landing-proof-rail {
+  background-image: linear-gradient(180deg, rgba(18, 20, 26, 0.78), rgba(11, 13, 18, 0.62));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), inset 0 -1px 0 rgba(255, 255, 255, 0.035);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(12px) saturate(120%);
+}
+
+.landing-access-overlay {
+  background: rgba(5, 6, 8, 0.78) !important;
+}
+
+.landing-access-modal {
+  background-image: linear-gradient(145deg, rgba(25, 28, 37, 0.97), rgba(13, 15, 21, 0.95));
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+  backdrop-filter: blur(22px) saturate(135%);
+}
+
+.landing-access-modal :where(input, select) {
+  min-height: 2.75rem;
+  background: rgba(7, 8, 11, 0.62) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.landing-access-modal :where(input, select):focus-visible {
+  outline: 2px solid rgba(255, 90, 82, 0.9);
+  outline-offset: 2px;
+}
+
+.landing-shell .landing-feature-card,
+.landing-shell .landing-automation-cta {
+  background: linear-gradient(145deg, rgba(24, 27, 35, 0.84), rgba(18, 20, 26, 0.62)) !important;
+  border-color: rgba(255, 255, 255, 0.11) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 12px 30px rgba(0, 0, 0, 0.16);
+  -webkit-backdrop-filter: blur(14px) saturate(125%);
+  backdrop-filter: blur(14px) saturate(125%);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.landing-shell .landing-feature-card:hover,
+.landing-shell .landing-automation-cta:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 59, 48, 0.3) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 18px 38px rgba(0, 0, 0, 0.22);
+}
+
+.landing-shell .landing-workspace-preview {
+  background: linear-gradient(145deg, rgba(20, 22, 30, 0.98), rgba(10, 12, 17, 0.98)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 28px 82px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.landing-shell .landing-cta-panel {
+  border-color: rgba(255, 59, 48, 0.2) !important;
+  box-shadow: 0 28px 76px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.landing-shell footer a {
+  text-underline-offset: 0.2em;
+}
+
+@media (max-width: 767px) {
+  .landing-shell .landing-feature-card:hover,
+  .landing-shell .landing-automation-cta:hover {
+    transform: none;
+  }
+
+  .landing-shell .landing-workspace-preview {
+    border-radius: 1rem !important;
+  }
+
+  .landing-shell .landing-proof-rail {
+    padding-block: 0.15rem;
+  }
+}
+
+/* Overlay surfaces are mounted outside the page cards, so they need their
+   own theme contract. This keeps Copilot, drawers, and intelligence dialogs
+   readable in light mode instead of leaking the dark workstation palette. */
+.copilot-panel,
+.workstation-drawer-panel,
+.workstation-dialog-panel {
+  color: var(--text-primary);
+  border-color: var(--glass-border) !important;
+  background: var(--glass-fill) !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28), inset 0 1px 0 var(--glass-highlight) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+.copilot-panel :where(.copilot-header, .copilot-telemetry, .copilot-quick-prompts, .copilot-composer),
+.workstation-drawer-panel :where(.drawer-header, .drawer-footer),
+.workstation-dialog-panel :where(.dialog-header, .dialog-footer) {
+  border-color: var(--border-subtle) !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+}
+
+.copilot-panel .copilot-assistant-message,
+.copilot-panel .copilot-typing,
+.copilot-panel .copilot-email-card,
+.copilot-panel .copilot-input {
+  border-color: var(--glass-border) !important;
+  background: var(--glass-fill-soft) !important;
+  color: var(--text-primary) !important;
+}
+
+.copilot-panel .copilot-input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+html[data-theme="light"] :where(
+  [class*="bg-[#0D111C"],
+  [class*="bg-[#080B11"],
+  [class*="bg-[#0E1320"],
+  [class*="bg-[#0A0D14"],
+  [class*="bg-[#0A1224"],
+  [class*="bg-[#121826"],
+  [class*="bg-[#10121A"],
+  [class*="bg-[#141620"],
+  [class*="bg-[#0C0E14"]
+) {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .copilot-panel :where(.text-white, .text-neutral-200, .text-neutral-300) {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .copilot-panel :where(.text-neutral-400, .text-neutral-500) {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .copilot-panel .copilot-trigger,
+html[data-theme="light"] .copilot-panel button[class*="bg-[#FF3B30"] {
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] :where(
+  [class*="border-[#1E293B"],
+  [class*="border-[#1E283D"],
+  [class*="border-[#182236"],
+  [class*="border-[#161F30"],
+  [class*="border-[#223048"]
+) {
+  border-color: rgba(15, 23, 42, 0.14) !important;
+}
+
+/* Product-wide polish pass: semantic metric surfaces and route canvases.
+   These rules intentionally sit at the end of the file so legacy route-local
+   utility classes resolve into the same material system in both themes. */
+.workstation-metric {
+  min-height: 8.25rem;
+  gap: 1rem;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 1rem;
+  background: var(--glass-fill) !important;
+  color: var(--text-primary);
+  box-shadow: var(--glass-shadow) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.workstation-metric:hover {
+  border-color: rgba(255, 59, 48, 0.34) !important;
+  transform: translateY(-1px);
+}
+
+.workstation-metric:focus-visible {
+  outline: 2px solid var(--brand-red);
+  outline-offset: 2px;
+}
+
+.metric-content-signal {
+  position: relative;
+}
+
+.metric-content-signal::before {
+  content: '';
+  position: absolute;
+  top: 0.2rem;
+  left: -0.65rem;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: var(--brand-red);
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.1);
+}
+
+.metric-label {
+  color: var(--text-muted);
+  line-height: 1.25;
+}
+
+.metric-value {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.metric-value-hero {
+  letter-spacing: -0.04em;
+}
+
+.metric-trend,
+.metric-sublabel {
+  color: var(--text-muted);
+}
+
+.metric-sublabel {
+  border-top: 1px solid var(--border-subtle);
+  line-height: 1.35;
+}
+
+.metric-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.metric-status::before {
+  width: 0.3rem;
+  height: 0.3rem;
+  margin-right: 0.35rem;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+}
+
+.metric-status-emerald,
+.metric-status-provenance-verified,
+.metric-status-provenance-recommendation {
+  color: #10b981;
+}
+
+.metric-status-red,
+.metric-status-provenance-ai {
+  color: #ff5a52;
+}
+
+.metric-status-amber,
+.metric-status-provenance-scenario {
+  color: #f59e0b;
+}
+
+.metric-status-neutral,
+.metric-status-provenance-actual {
+  color: var(--text-muted);
+}
+
+.metric-status-provenance-predicted {
+  color: #60a5fa;
+}
+
+/* Remove legacy black page slabs. The route identity now comes from the
+   shared shell and elevated sections, not an opaque rectangle behind them. */
+.workstation-main :where(
+  .approval-page,
+  .agents-page,
+  .payments-page,
+  .reports-page,
+  .integrations-page,
+  .cash-unblock-page,
+  .causal-graph-page,
+  .notifications-page
+) {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+}
+
+.workstation-main :where(
+  .approval-queue,
+  .approval-detail,
+  .approval-audit,
+  .agents-roster,
+  .payments-table,
+  .reports-selector,
+  .reports-index,
+  .reports-preview,
+  .integrations-insight,
+  .integrations-connectors,
+  .cash-unblock-workspace,
+  .causal-graph-canvas
+) {
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 1rem;
+  background: var(--glass-fill) !important;
+  box-shadow: var(--glass-shadow) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.workstation-main :where(table thead, .approval-tabs) {
+  background: rgba(148, 163, 184, 0.08) !important;
+}
+
+.workstation-main :where(th) {
+  color: var(--text-secondary) !important;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+}
+
+.workstation-main :where(td) {
+  color: var(--text-secondary);
+  border-color: var(--border-subtle) !important;
+}
+
+/* Settings notifications is a standalone legacy surface, so give it the
+   same workstation material language explicitly. */
+.notifications-page {
+  background:
+    radial-gradient(circle at 82% 0%, rgba(255, 59, 48, 0.08), transparent 28rem),
+    var(--background) !important;
+  color: var(--text-primary) !important;
+}
+
+.notifications-page .notifications-header,
+.notifications-page .notifications-hero,
+.notifications-page .notifications-status,
+.notifications-page .notifications-preferences {
+  border: 1px solid var(--glass-border) !important;
+  background: var(--glass-fill) !important;
+  box-shadow: var(--glass-shadow) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.notifications-page :where(h1, h3, span, label) {
+  color: var(--text-primary);
+}
+
+.notifications-page :where(p, .text-neutral-400, .text-neutral-500) {
+  color: var(--text-secondary) !important;
+}
+
+.notifications-page :where(.divide-neutral-800 > *) {
+  border-color: var(--border-subtle) !important;
+}
+
+html[data-theme="light"] .notifications-page :where(input[type="checkbox"]) {
+  accent-color: var(--brand-red);
+}
+
+@media (max-width: 767px) {
+  .workstation-metric {
+    min-height: 7.5rem;
+    padding: 0.9rem;
+  }
+
+  .metric-status {
+    padding-inline: 0.4rem;
+    font-size: 0.52rem;
+  }
+}
+
+/* Navigation refinement: active state is a contained surface, not a stripe. */
+.workstation-nav-item {
+  min-height: 2.25rem;
+  letter-spacing: -0.01em;
+  isolation: isolate;
+}
+
+.workstation-nav-item::after {
+  background: rgba(255, 59, 48, 0.78);
+  border-radius: 999px;
+  content: "";
+  height: 0.35rem;
+  opacity: 0;
+  position: absolute;
+  right: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%) scale(0.65);
+  transition: opacity 160ms ease, transform 160ms ease;
+  width: 0.35rem;
+}
+
+.workstation-nav-item-active {
+  background:
+    radial-gradient(circle at 0% 50%, rgba(255, 59, 48, 0.14), transparent 55%),
+    rgba(255, 255, 255, 0.075) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 59, 48, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.workstation-nav-item-active::after {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+html[data-theme="light"] .workstation-nav-item-active {
+  background:
+    radial-gradient(circle at 0% 50%, rgba(229, 56, 53, 0.1), transparent 55%),
+    rgba(15, 23, 42, 0.055) !important;
+  box-shadow: inset 0 0 0 1px rgba(229, 56, 53, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+  color: #0f172a !important;
+}
+
+/* Give page headers a stable reading rhythm across all operational routes. */
+.workstation-main :where(h1) {
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.workstation-main :where(h2) {
+  letter-spacing: -0.02em;
+  line-height: 1.16;
+}
+
+.workstation-main :where(p) {
+  line-height: 1.55;
+}
+
+.workstation-main :where(input, select, textarea) {
+  min-height: 2.5rem;
+  border-radius: 0.7rem;
+}
+
+.workstation-main :where(button):not([aria-hidden="true"]) {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.workstation-main :where(button):not(:disabled):active {
+  transform: translateY(1px);
+}
+
+/* Make empty states feel intentional instead of like unfilled rectangles. */
+.workstation-main :where(.approval-empty, .approval-detail-empty, .empty-state, [data-empty-state="true"]) {
+  min-height: 10rem;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  background: var(--glass-fill-soft) !important;
+  border: 1px dashed var(--glass-border) !important;
+  border-radius: 0.9rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workstation-nav-item::after {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Replace repeated side-tab stripes with a quieter inset signal. The headers
+   keep their hierarchy through spacing, weight, and surface contrast. */
+.workstation-main :where(
+  .integrations-insight,
+  .cfo-trend-item,
+  .receivables-header,
+  .cash-unblock-header,
+  .customers-header,
+  .exceptions-header,
+  .collections-header,
+  .payments-unmatched,
+  .investigations-header,
+  .causal-graph-header,
+  .causal-graph-health,
+  .cfo-header,
+  .reports-header,
+  .integrations-header,
+  .approval-header,
+  .settings-header,
+  .notifications-header,
+  .notifications-hero
+)::before {
+  width: 0 !important;
+  opacity: 0 !important;
+}
+
+.workstation-main :where(
+  .integrations-insight,
+  .cfo-trend-item,
+  .receivables-header,
+  .cash-unblock-header,
+  .customers-header,
+  .exceptions-header,
+  .collections-header,
+  .payments-unmatched,
+  .investigations-header,
+  .causal-graph-header,
+  .causal-graph-health,
+  .cfo-header,
+  .reports-header,
+  .integrations-header,
+  .approval-header,
+  .settings-header,
+  .notifications-header,
+  .notifications-hero
+) {
+  box-shadow: inset 0 1px 0 rgba(255, 59, 48, 0.2), 0 18px 42px rgba(0, 0, 0, 0.16) !important;
+  padding-left: 1.1rem !important;
+}
+
+html[data-theme="light"] .workstation-main :where(
+  .integrations-insight,
+  .cfo-trend-item,
+  .receivables-header,
+  .cash-unblock-header,
+  .customers-header,
+  .exceptions-header,
+  .collections-header,
+  .payments-unmatched,
+  .investigations-header,
+  .causal-graph-header,
+  .causal-graph-health,
+  .cfo-header,
+  .reports-header,
+  .integrations-header,
+  .approval-header,
+  .settings-header,
+  .notifications-header,
+  .notifications-hero
+) {
+  box-shadow: inset 0 1px 0 rgba(229, 56, 53, 0.18), 0 18px 42px rgba(15, 23, 42, 0.08) !important;
+  padding-left: 1.1rem !important;
+}
+
+.workstation-main :where(
+  .integrations-insight,
+  .cfo-trend-item,
+  .receivables-header,
+  .cash-unblock-header,
+  .customers-header,
+  .exceptions-header,
+  .collections-header,
+  .payments-unmatched,
+  .investigations-header,
+  .causal-graph-header,
+  .causal-graph-health,
+  .cfo-header,
+  .reports-header,
+  .integrations-header,
+  .approval-header,
+  .settings-header,
+  .notifications-header,
+  .notifications-hero
+)::before {
+  display: none !important;
+}
+
+/* Final shared surface pass.
+   Keep the glass effect intentional: the workspace remains readable and
+   dense, while elevated surfaces share one consistent material language. */
+:root {
+  --glass-fill: linear-gradient(145deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.035));
+  --glass-fill-soft: rgba(255, 255, 255, 0.055);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.09);
+  --glass-shadow: 0 18px 44px rgba(0, 0, 0, 0.2), inset 0 1px 0 var(--glass-highlight);
+  --glass-blur: blur(20px) saturate(138%);
+}
+
+html[data-theme="light"] {
+  --glass-fill: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.78));
+  --glass-fill-soft: rgba(248, 250, 252, 0.84);
+  --glass-border: rgba(148, 163, 184, 0.28);
+  --glass-highlight: rgba(255, 255, 255, 0.94);
+  --glass-shadow: 0 18px 44px rgba(15, 23, 42, 0.09), inset 0 1px 0 var(--glass-highlight);
+}
+
+/* Shared route canvas: subtle depth, no competing bands or black seams. */
+.workstation-main {
+  background-color: var(--background) !important;
+  background-image:
+    radial-gradient(circle at 88% 0%, rgba(255, 59, 48, 0.07), transparent 26rem),
+    radial-gradient(circle at 8% 28%, rgba(59, 130, 246, 0.045), transparent 24rem) !important;
+}
+
+.workstation-main .workstation-card,
+.workstation-main .workstation-card-interactive,
+.workstation-main .workstation-panel,
+.workstation-main .workstation-surface,
+.workstation-main .workstation-band,
+.workstation-main [class*="bg-[#09090b"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-[#050505"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-black"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-zinc-950"]:not(button):not(input):not(select):not(textarea),
+.workstation-main [class*="bg-neutral-950"]:not(button):not(input):not(select):not(textarea) {
+  background: var(--glass-fill) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.workstation-main .workstation-card,
+.workstation-main .workstation-card-interactive,
+.workstation-main .workstation-panel,
+.workstation-main .workstation-surface,
+.workstation-main .workstation-band {
+  border-radius: 1rem;
+}
+
+.workstation-main .workstation-card-interactive,
+.workstation-main button[class*="workstation-card"] {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.workstation-main .workstation-card-interactive:hover,
+.workstation-main button[class*="workstation-card"]:hover {
+  border-color: rgba(255, 59, 48, 0.34) !important;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.22), inset 0 1px 0 var(--glass-highlight) !important;
+}
+
+/* Metric bands should read as one system instead of six unrelated boxes. */
+.workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) {
+  align-items: stretch;
+}
+
+.workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) > * {
+  min-width: 0;
+  border-radius: 1rem !important;
+}
+
+.workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) [class*="tracking-wider"] {
+  letter-spacing: 0.12em;
+  line-height: 1.25;
+}
+
+/* The persistent chrome is part of the product's material system too. */
+.workstation-sidebar,
+.workstation-mobile-bar,
+.workstation-command-status {
+  background: linear-gradient(180deg, rgba(18, 20, 26, 0.92), rgba(10, 11, 14, 0.84)) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: 18px 0 48px rgba(0, 0, 0, 0.18), inset -1px 0 0 rgba(255, 255, 255, 0.04) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(138%);
+  backdrop-filter: blur(24px) saturate(138%);
+}
+
+html[data-theme="light"] .workstation-sidebar,
+html[data-theme="light"] .workstation-mobile-bar,
+html[data-theme="light"] .workstation-command-status {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.86)) !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  box-shadow: 18px 0 48px rgba(15, 23, 42, 0.1), inset -1px 0 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Landing-page cards use the same material, but with more breathing room. */
+.landing-shell .workstation-card,
+.landing-shell .workstation-card-interactive {
+  background: var(--glass-fill) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+html[data-theme="light"] .landing-shell .workstation-card,
+html[data-theme="light"] .landing-shell .workstation-card-interactive {
+  color: #0f172a !important;
+}
+
+/* Keep browser surfaces aligned with the chosen theme. */
+::selection {
+  background: rgba(255, 59, 48, 0.28);
+  color: inherit;
+}
+
+html[data-theme="light"] ::selection {
+  background: rgba(229, 56, 53, 0.18);
+  color: #0f172a;
+}
+
+.custom-scrollbar {
+  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+}
+
+html[data-theme="light"] .custom-scrollbar {
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
+}
+
+@media (max-width: 767px) {
+  .workstation-main {
+    background-image: radial-gradient(circle at 90% 0%, rgba(255, 59, 48, 0.08), transparent 18rem) !important;
+  }
+
+  .workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) > * {
+    border-radius: 0.85rem !important;
+  }
+}
+
+/* Final workstation refinement: one material language across every route.
+   This sits last intentionally so legacy utility classes cannot reintroduce
+   black seams, hard status rectangles, or uneven metric bands. */
+.workstation-main {
+  color: var(--text-primary);
+  min-height: 100%;
+  isolation: isolate;
+}
+
+.workstation-main :where(h1, h2, h3, h4) {
+  letter-spacing: -0.025em;
+}
+
+.workstation-main :where(p, label, th, td, button, input, select, textarea) {
+  text-rendering: optimizeLegibility;
+}
+
+.workstation-main :where(
+  [class*="bg-black"],
+  [class*="bg-zinc-950"],
+  [class*="bg-zinc-900"],
+  [class*="bg-neutral-950"],
+  [class*="bg-neutral-900"],
+  [class*="bg-[#050"],
+  [class*="bg-[#070"],
+  [class*="bg-[#080"],
+  [class*="bg-[#090"],
+  [class*="bg-[#0A"],
+  [class*="bg-[#0D"],
+  [class*="bg-[#0d"],
+  [class*="bg-[#0E"],
+  [class*="bg-[#0F"],
+  [class*="bg-[#12"],
+  [class*="bg-[#14"],
+  [class*="bg-[#18"]
+):not(button):not(input):not(select):not(textarea) {
+  background: var(--glass-fill) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.workstation-main :where(.workstation-card, .workstation-card-interactive, .workstation-panel, .workstation-surface, .workstation-band) {
+  border-radius: 1rem !important;
+}
+
+.workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) {
+  gap: 0.8rem !important;
+}
+
+.workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) > * {
+  min-height: 8.25rem;
+  padding: 1.15rem !important;
+  border: 1px solid var(--glass-border) !important;
+  background: var(--glass-fill) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+.workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) > *::before {
+  height: 1px !important;
+  margin: -1.15rem -1.15rem 1rem !important;
+  opacity: 0.72;
+}
+
+/* Status labels become quiet, semantic chips rather than painted boxes. */
+.workstation-main :where(
+  .approval-metrics,
+  .report-metrics,
+  .agents-metrics,
+  .payments-metrics,
+  .cash-unblock-metrics
+) [class*="tracking-wider"] {
+  padding: 0.28rem 0.5rem !important;
+  border: 1px solid currentColor !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, currentColor 10%, transparent) !important;
+  font-size: 0.58rem !important;
+  font-weight: 700;
+  letter-spacing: 0.09em !important;
+  white-space: nowrap;
+}
+
+.workstation-main :where(table) {
+  border-radius: 1rem;
+  overflow: hidden;
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--glass-border);
+}
+
+.workstation-main :where(table thead) {
+  background: rgba(148, 163, 184, 0.1) !important;
+}
+
+.workstation-main :where(table th) {
+  color: var(--text-secondary) !important;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workstation-main :where(table tbody tr) {
+  transition: background-color 160ms ease;
+}
+
+.workstation-main :where(table tbody tr:hover) {
+  background: rgba(255, 59, 48, 0.045) !important;
+}
+
+.workstation-main :where(input, select, textarea) {
+  min-height: 2.55rem;
+  border-radius: 0.7rem !important;
+  color: var(--text-primary) !important;
+}
+
+.workstation-main :where(input::placeholder, textarea::placeholder) {
+  color: var(--text-subtle) !important;
+  opacity: 1;
+}
+
+.workstation-main :where(button:not(.btn-editorial-primary)) {
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.workstation-main :where(button:not(:disabled):not(.btn-editorial-primary):hover) {
+  border-color: rgba(255, 59, 48, 0.35) !important;
+}
+
+.workstation-main :where(button:not(:disabled):active) {
+  transform: translateY(1px);
+}
+
+/* Headers share a single reading rhythm while retaining each route's copy. */
+.workstation-main :where(
+  .dashboard-command-header,
+  .receivables-header,
+  .cash-unblock-header,
+  .customers-header,
+  .exceptions-header,
+  .collections-header,
+  .payments-unmatched,
+  .investigations-header,
+  .causal-graph-header,
+  .cfo-header,
+  .reports-header,
+  .integrations-header,
+  .approval-header,
+  .settings-header,
+  .notifications-header,
+  .notifications-hero
+) {
+  min-height: 5.25rem;
+  border-radius: 1.15rem !important;
+  padding: 1.15rem 1.25rem !important;
+}
+
+.workstation-main :where(
+  .dashboard-command-header,
+  .receivables-header,
+  .cash-unblock-header,
+  .customers-header,
+  .exceptions-header,
+  .collections-header,
+  .payments-unmatched,
+  .investigations-header,
+  .causal-graph-header,
+  .cfo-header,
+  .reports-header,
+  .integrations-header,
+  .approval-header,
+  .settings-header,
+  .notifications-header,
+  .notifications-hero
+) :where(h1, h2, h3) {
+  line-height: 1.05;
+}
+
+.workstation-main :where(.exceptions-empty, .approval-empty, .approval-detail-empty, .customers-empty, .receivables-empty) {
+  min-height: 12rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.45rem;
+  border-radius: 1rem !important;
+  background: var(--glass-fill-soft) !important;
+  border: 1px dashed var(--glass-border) !important;
+}
+
+.workstation-main :where(.workstation-card, .workstation-card-interactive):focus-within {
+  border-color: rgba(255, 59, 48, 0.42) !important;
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.1), var(--glass-shadow) !important;
+}
+
+.workstation-main :where(.integrations-tabs, .approval-tabs) {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: 0.85rem !important;
+  background: var(--glass-fill-soft) !important;
+  border-color: var(--glass-border) !important;
+}
+
+.workstation-main :where(.integrations-tabs, .approval-tabs)::-webkit-scrollbar {
+  display: none;
+}
+
+.workstation-main :where(.integrations-tabs, .approval-tabs) button {
+  min-height: 2.2rem;
+  flex: 0 0 auto;
+  padding-inline: 0.75rem !important;
+  border: 1px solid transparent;
+  border-radius: 0.6rem !important;
+  white-space: nowrap;
+}
+
+.workstation-main :where(.integrations-tabs, .approval-tabs) button:hover {
+  background: rgba(255, 59, 48, 0.08) !important;
+}
+
+.workstation-main :where(.integrations-tabs, .approval-tabs) button[class*="bg-zinc-800"] {
+  background: rgba(255, 59, 48, 0.12) !important;
+  border-color: rgba(255, 59, 48, 0.28) !important;
+  color: var(--text-primary) !important;
+}
+
+.workstation-main :where(.integrations-card, .approval-queue, .approval-detail, .approval-audit) {
+  border-radius: 1rem !important;
+  border-color: var(--glass-border) !important;
+  background: var(--glass-fill) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+.workstation-main .integrations-card {
+  min-height: 15rem;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.workstation-main .integrations-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 59, 48, 0.28) !important;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.18), inset 0 1px 0 var(--glass-highlight) !important;
+}
+
+.workstation-nav-item {
+  min-height: 2.45rem;
+  border: 1px solid transparent;
+}
+
+.workstation-nav-item:hover {
+  border-color: rgba(255, 59, 48, 0.18);
+}
+
+.workstation-nav-item-active {
+  border-color: rgba(255, 59, 48, 0.22) !important;
+  background: linear-gradient(90deg, rgba(255, 59, 48, 0.12), rgba(255, 255, 255, 0.04)) !important;
+}
+
+.workstation-sidebar .custom-scrollbar {
+  scrollbar-gutter: stable;
+}
+
+.copilot-panel {
+  max-width: calc(100vw - 2rem);
+  max-height: min(620px, calc(100dvh - 7rem));
+}
+
+.copilot-panel :where(button, input) {
+  min-height: 2.5rem;
+}
+
+.copilot-panel :where(input) {
+  border-radius: 0.75rem !important;
+}
+
+.copilot-panel :where(button):focus-visible,
+.copilot-panel :where(input):focus-visible {
+  outline-offset: 2px;
+}
+
+html[data-theme="light"] .workstation-main {
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-subtle: #64748b;
+}
+
+html[data-theme="light"] .workstation-main :where(
+  [class*="text-white"],
+  [class*="text-neutral-100"],
+  [class*="text-neutral-200"],
+  [class*="text-neutral-300"],
+  [class*="text-zinc-100"],
+  [class*="text-zinc-200"],
+  [class*="text-zinc-300"]
+):not(button):not(.btn-editorial-primary) {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .workstation-main :where(
+  [class*="text-neutral-400"],
+  [class*="text-neutral-500"],
+  [class*="text-zinc-400"],
+  [class*="text-zinc-500"]
+) {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .workstation-main :where(
+  [class*="bg-black"],
+  [class*="bg-zinc-950"],
+  [class*="bg-zinc-900"],
+  [class*="bg-neutral-950"],
+  [class*="bg-neutral-900"],
+  [class*="bg-[#050"],
+  [class*="bg-[#070"],
+  [class*="bg-[#080"],
+  [class*="bg-[#090"],
+  [class*="bg-[#0A"],
+  [class*="bg-[#0D"],
+  [class*="bg-[#0d"],
+  [class*="bg-[#0E"],
+  [class*="bg-[#0F"],
+  [class*="bg-[#12"],
+  [class*="bg-[#14"],
+  [class*="bg-[#18"]
+):not(button):not(input):not(select):not(textarea) {
+  background: var(--glass-fill) !important;
+  color: #0f172a !important;
+  border-color: var(--glass-border) !important;
+}
+
+html[data-theme="light"] .workstation-main :where(table thead) {
+  background: rgba(226, 232, 240, 0.72) !important;
+}
+
+html[data-theme="light"] .workstation-nav-item-active {
+  background: linear-gradient(90deg, rgba(229, 56, 53, 0.1), rgba(241, 245, 249, 0.9)) !important;
+  color: #0f172a !important;
+  border-color: rgba(229, 56, 53, 0.22) !important;
+}
+
+html[data-theme="light"] .workstation-nav-item:hover {
+  background: rgba(241, 245, 249, 0.86) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .workstation-main :where(.integrations-tabs, .approval-tabs) button[class*="bg-zinc-800"] {
+  background: rgba(229, 56, 53, 0.1) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .workstation-mobile-bar {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .workstation-mobile-bar button {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  color: #334155 !important;
+}
+
+@media (max-width: 767px) {
+  .workstation-main {
+    padding: 1rem !important;
+  }
+
+  .workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) {
+    gap: 0.65rem !important;
+  }
+
+  .workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) > * {
+    min-height: 7.5rem;
+    padding: 1rem !important;
+  }
+
+  .workstation-main :where(
+    .dashboard-command-header,
+    .receivables-header,
+    .cash-unblock-header,
+    .customers-header,
+    .exceptions-header,
+    .collections-header,
+    .payments-unmatched,
+    .investigations-header,
+    .causal-graph-header,
+    .cfo-header,
+    .reports-header,
+    .integrations-header,
+    .approval-header,
+    .settings-header,
+    .notifications-header,
+    .notifications-hero
+  ) {
+    min-height: 0;
+    padding: 1rem !important;
+  }
+
+  .copilot-panel {
+    right: 0.75rem !important;
+    bottom: 4.5rem !important;
+    width: calc(100vw - 1.5rem) !important;
+    height: min(620px, calc(100dvh - 6rem)) !important;
+    max-height: calc(100dvh - 6rem);
+    border-radius: 1.25rem !important;
+  }
+
+  .copilot-trigger {
+    right: 0.75rem !important;
+    bottom: 0.9rem !important;
+  }
+
+  .workstation-main :where(.approval-workspace) {
+    gap: 1rem !important;
+  }
+
+  .workstation-main :where(.approval-queue, .approval-detail) {
+    min-height: 0;
+  }
+}
+
+/* Final cross-product consistency pass.
+   Keep the workstation dense, but make the shared primitives feel deliberate
+   at every route and input size. */
+:root {
+  --focus-ring: rgba(255, 59, 48, 0.62);
+  --control-height: 2.625rem;
+  --glass-blur-compact: blur(14px) saturate(128%);
+}
+
+.workstation-main :where(button, select, input, textarea),
+.workstation-mobile-bar button,
+.workstation-sidebar button {
+  min-height: var(--control-height);
+}
+
+.workstation-main :where(button, select, input, textarea):focus-visible,
+.workstation-mobile-bar button:focus-visible,
+.workstation-sidebar button:focus-visible {
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 2px;
+}
+
+.workstation-nav-item {
+  min-height: 2.75rem;
+}
+
+.workstation-main :where(.workstation-card, .workstation-card-interactive, .workstation-panel, .workstation-surface) {
+  -webkit-backdrop-filter: var(--glass-blur-compact);
+  backdrop-filter: var(--glass-blur-compact);
+}
+
+/* Status is carried by the label and dot; a full-width color rail competes
+   with the number-first hierarchy on compact metric bands. */
+.workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) > *::before,
+.workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) > * > .relative::before {
+  height: 1px !important;
+  margin-top: -1rem !important;
+  margin-bottom: 0.85rem !important;
+  opacity: 0.72;
+}
+
+.workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) > * {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.075), inset 0 1px 0 var(--glass-highlight) !important;
+}
+
+.workstation-main :where(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.workstation-main :where(p, td, th, label) {
+  text-wrap: pretty;
+}
+
+.workstation-main :where(table) {
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-theme="light"] .workstation-main :where(button, select, input, textarea) {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] .workstation-main :where(button, select, input, textarea),
+html:not([data-theme]) .workstation-main :where(button, select, input, textarea) {
+  color-scheme: dark;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #eef2f6;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #e53835;
+}
+
+@media (max-width: 767px) {
+  .workstation-main :where(.approval-metrics, .report-metrics, .agents-metrics, .payments-metrics, .cash-unblock-metrics) > * {
+    min-height: 8rem;
+  }
+
+  .workstation-main :where(.integrations-tabs, .approval-tabs) {
+    margin-inline: -0.15rem;
+    padding: 0.2rem;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .workstation-main :where(.workstation-card, .workstation-card-interactive, .workstation-panel, .workstation-surface),
+  .workstation-sidebar,
+  .workstation-mobile-bar,
+  .copilot-panel,
+  .workstation-drawer-panel,
+  .workstation-dialog-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-shell :where(*, *::before, *::after),
+  .landing-access-modal,
+  .landing-skip-link {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Notifications used to be the only dashboard-adjacent route outside the
+   workstation theme contract. Bring it into the same material and contrast
+   system without changing its preference behavior. */
+.notifications-page {
+  background:
+    radial-gradient(circle at 88% 0%, rgba(255, 59, 48, 0.08), transparent 26rem),
+    var(--background);
+  color: var(--text-primary);
+}
+
+.notifications-header {
+  background: color-mix(in srgb, var(--background) 86%, transparent) !important;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.notifications-dashboard-link,
+.notifications-hero,
+.notifications-status,
+.notifications-preferences {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-fill);
+  color: var(--text-primary);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur-compact);
+  backdrop-filter: var(--glass-blur-compact);
+}
+
+.notifications-dashboard-link {
+  background: var(--glass-fill-soft);
+}
+
+.notifications-dashboard-link:hover {
+  border-color: rgba(255, 59, 48, 0.36);
+  color: var(--text-primary);
+}
+
+.notifications-theme-toggle {
+  min-height: 2.625rem;
+  min-width: 2.625rem;
+  background: var(--glass-fill-soft) !important;
+  border-color: var(--glass-border) !important;
+}
+
+.notifications-org-switcher > button {
+  min-height: 2.625rem;
+  background: var(--glass-fill-soft) !important;
+  border-color: var(--glass-border) !important;
+  color: var(--text-primary) !important;
+}
+
+.notifications-org-switcher > button :where(span) {
+  color: var(--text-primary);
+}
+
+.notifications-org-switcher > button :where(span span) {
+  color: var(--text-muted);
+}
+
+.notifications-org-switcher > div {
+  background: var(--glass-fill) !important;
+  border-color: var(--glass-border) !important;
+}
+
+.notifications-muted {
+  color: var(--text-muted);
+}
+
+.notifications-preferences .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border-subtle);
+}
+
+.notifications-page .notification-checkbox {
+  accent-color: var(--brand-red);
+  min-height: 1rem;
+}
+
+.notifications-page label:has(.notification-checkbox) {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.7rem;
+}
+
+.notifications-page label:has(.notification-checkbox):hover {
+  border-color: var(--glass-border);
+  background: var(--glass-fill-soft);
+}
+
+html[data-theme="light"] .notifications-page {
+  --text-primary: #0f172a;
+  --text-muted: #475569;
+  --background: #f8fafc;
+  --glass-fill: rgba(255, 255, 255, 0.86);
+  --glass-fill-soft: rgba(241, 245, 249, 0.82);
+  --glass-border: rgba(15, 23, 42, 0.12);
+  --glass-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+html[data-theme="light"] .notifications-page .notifications-muted {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .notifications-page .notifications-header {
+  background: rgba(248, 250, 252, 0.9) !important;
+}
+
+/* Landing-page lower funnel pass: extend the shared material system beyond
+   the hero so integrations, proof, pricing, and footer feel intentional. */
+.landing-shell .landing-section {
+  isolation: isolate;
+}
+
+.landing-shell .landing-connector-card,
+.landing-shell .landing-metric-card,
+.landing-shell .landing-testimonial-card,
+.landing-shell .landing-pricing-card,
+.landing-shell .landing-directory-modal {
+  background-image: linear-gradient(145deg, rgba(24, 27, 35, 0.88), rgba(14, 16, 23, 0.74));
+  border-color: rgba(255, 255, 255, 0.11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 14px 34px rgba(0, 0, 0, 0.18);
+  -webkit-backdrop-filter: blur(14px) saturate(125%);
+  backdrop-filter: blur(14px) saturate(125%);
+}
+
+.landing-shell .landing-connector-card {
+  min-height: 5.5rem;
+}
+
+.landing-shell .landing-connector-card:hover,
+.landing-shell .landing-metric-card:hover,
+.landing-shell .landing-pricing-card:not(.landing-pricing-card-featured):hover {
+  border-color: rgba(255, 59, 48, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 18px 40px rgba(0, 0, 0, 0.24);
+}
+
+.landing-shell .landing-testimonial-card {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 58px rgba(0, 0, 0, 0.26);
+}
+
+.landing-shell .landing-pricing-card {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.landing-shell .landing-pricing-card-featured {
+  background-image: linear-gradient(145deg, rgba(43, 22, 28, 0.96), rgba(14, 16, 23, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 26px 64px rgba(239, 68, 68, 0.16);
+}
+
+.landing-shell .landing-footer a {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+}
+
+.landing-shell .landing-footer img {
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.24));
+}
+
+.landing-shell .landing-footer-meta {
+  color: rgba(163, 163, 163, 0.74);
+}
+
+@media (max-width: 767px) {
+  .landing-shell .landing-pricing-card-featured { transform: none; }
+  .landing-shell .landing-pricing-card:hover { transform: none; }
+  .landing-shell .landing-testimonial-card { padding: 1.25rem; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .landing-shell .landing-connector-card,
+  .landing-shell .landing-metric-card,
+  .landing-shell .landing-testimonial-card,
+  .landing-shell .landing-pricing-card,
+  .landing-shell .landing-directory-modal {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* ============================================================
+   AIOSpark Premium Landing Animations
+   Respects prefers-reduced-motion. Uses transforms for performance.
+   ============================================================ */
+
+@keyframes ai-count-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ai-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ai-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ai-pulse-red {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes ai-data-flow {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  40%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+@keyframes ai-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Scroll-reveal base state */
+.ai-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.75s cubic-bezier(0.23, 1, 0.32, 1), transform 0.75s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.ai-reveal.ai-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.ai-reveal.ai-delay-1 { transition-delay: 0.08s; }
+.ai-reveal.ai-delay-2 { transition-delay: 0.18s; }
+.ai-reveal.ai-delay-3 { transition-delay: 0.28s; }
+.ai-reveal.ai-delay-4 { transition-delay: 0.38s; }
+.ai-reveal.ai-delay-5 { transition-delay: 0.48s; }
+
+/* Interactive surface micro-interactions */
+.ai-surface {
+  position: relative;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.ai-surface:hover {
+  transform: translateY(-2px);
+  border-color: rgba(239, 68, 68, 0.35);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.ai-surface:active {
+  transform: translateY(0);
+}
+
+.ai-border-glow:hover {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ai-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  [class*="animate-"] {
+    animation: none !important;
+  }
 }
