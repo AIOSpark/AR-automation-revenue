@@ -126,3 +126,7 @@ export function readSnapshotDirect<T>(namespace: string): T | null {
 export function getDatabase() {
   return database;
 }
+
+export function closeDatabase(): void {
+  (database as any).close();
+}

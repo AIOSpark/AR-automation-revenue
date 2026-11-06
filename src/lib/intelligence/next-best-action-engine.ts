@@ -63,7 +63,7 @@ export interface NextBestActionRecommendation {
   remainingExposureMinorUnits: number;
   blockerCategory: string;
   rootCause: string;
-  rootCauseProvenance: 'VERIFIED' | 'AI_INFERRED' | 'UNKNOWN';
+  rootCauseProvenance: 'VERIFIED' | 'RULE_INFERRED' | 'AI_INFERRED' | 'UNKNOWN';
   dependency: string;
   actionabilityState: ActionabilityState;
   
@@ -147,7 +147,7 @@ export class NextBestActionEngine {
     let primaryCandidate: ActionCandidate;
     let confidence: 'HIGH' | 'MEDIUM' | 'LOW' = 'HIGH';
     let confidenceReason = 'Authoritative UDM relationships verified';
-    let rootCauseProvenance: 'VERIFIED' | 'AI_INFERRED' | 'UNKNOWN' = 'VERIFIED';
+    let rootCauseProvenance: 'VERIFIED' | 'RULE_INFERRED' | 'AI_INFERRED' | 'UNKNOWN' = 'RULE_INFERRED';
     let rootCauseText = 'Invoice awaiting payment processing';
     let blockerCategory = 'Standard Terms';
     let dependency = 'Customer AP';

@@ -40,6 +40,7 @@ export function setPilotMode(orgId: string, enabled: boolean): boolean {
   if (!org) return false;
   org.pilotMode = enabled;
   org.updated_at = new Date().toISOString();
+  authStore.persistState();
   return true;
 }
 

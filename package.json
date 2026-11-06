@@ -12,7 +12,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "npm run verify",
-    "verify": "npm run lint && npm run typecheck && npm run test:scan && npm run test:master && npm run test:financial-stress",
+    "verify": "set +e; npm run lint; L=$?; npm run typecheck; T=$?; npm run test:scan; S=$?; npm run test:master; M=$?; npm run test:financial-stress; F=$?; npm run test:durability; D=$?; npm run test:pilot-security; P=$?; RC=0; [ $L -eq 0 ] || RC=1; [ $T -eq 0 ] || RC=1; [ $S -eq 0 ] || RC=1; [ $M -eq 0 ] || RC=1; [ $F -eq 0 ] || RC=1; [ $D -eq 0 ] || RC=1; [ $P -eq 0 ] || RC=1; exit $RC",
     "test:scan": "node scripts/security-scan.mjs",
     "test:external": "node scripts/test-external-release.mjs",
     "test:unit": "AIOSPARK_TEST_MODE=true tsx scripts/test-unit.mjs",
@@ -50,7 +50,9 @@
     "test:safety": "AIOSPARK_TEST_MODE=true tsx scripts/test-safety.mjs",
     "test:beta": "AIOSPARK_TEST_MODE=true tsx scripts/test-beta.mjs",
     "test:discipline": "AIOSPARK_TEST_MODE=true tsx scripts/test-discipline.mjs",
-    "test:master": "AIOSPARK_TEST_MODE=true node --import tsx scripts/test-master.mjs"
+    "test:master": "AIOSPARK_TEST_MODE=true node --import tsx scripts/test-master.mjs",
+    "test:durability": "AIOSPARK_DB_PATH=/tmp/aiospark-durability-test.sqlite AIOSPARK_TEST_MODE=false node --import tsx scripts/test-durability.mjs",
+    "test:pilot-security": "AIOSPARK_DB_PATH=/tmp/aiospark-pilot-test.sqlite AIOSPARK_TEST_MODE=false node --import tsx scripts/test-pilot-security.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

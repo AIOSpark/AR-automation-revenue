@@ -63,9 +63,10 @@ export async function POST(req: Request) {
     if (permissionError) return permissionError;
     const organizationId = context!.organization.id;
 
+    const pilotError = validatePilotReadOnly(organizationId, 'FINANCIAL_TRANSACTION');
+    if (pilotError) return pilotError;
+
     // Read-only pilot mode: this endpoint drafts a collection follow-up internally.
-    // It does not send external customer communications, so it is allowed during pilot.
-    // External dispatch would require a separate approval action through /api/approvals.
 
   try {
     const body = await req.json();

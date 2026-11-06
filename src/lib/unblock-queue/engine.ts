@@ -4,6 +4,7 @@
 import { udmStore } from '../udm/store';
 import { Invoice, Customer, ExceptionRecord, Dispute } from '../udm/types';
 import { evaluatePaymentProbability, buildCausalChain, CausalChainSummary } from '../intelligence/advanced-engine';
+import { getInvoiceOutstandingBalance } from '../dashboard/engine';
 
 export type ActionabilityStatus =
   | 'ACTIONABLE_NOW'
@@ -150,14 +151,14 @@ export function getCashUnblockQueue(orgId: string, userId?: string): UnblockQueu
     const priorityExplanation = `${priority} Priority — ₹${(inv.amount_minor_units / 100).toLocaleString('en-IN')} affected, ${daysOverdue} days overdue, ${primaryBlocker}`;
     const causalChain = buildCausalChain(inv.id, orgId);
 
-    queue.push({
-      id: `queue_${inv.id}`,
-      invoiceId: inv.id,
-      invoiceNumber: inv.number,
-      customerId: inv.customer_id,
-      customerName: custName,
-      cashAffectedMinorUnits: inv.amount_minor_units,
-      daysOverdue,
+      queue.push({
+        id: `queue_${inv.id}`,
+        invoiceId: inv.id,
+        invoiceNumber: inv.number,
+        customerId: inv.customer_id,
+        customerName: custName,
+        cashAffectedMinorUnits: getInvoiceOutstandingBalance(inv),
+        daysOverdue,
       primaryBlocker,
       rootCause,
       priority,
@@ -189,6 +190,12 @@ export function getCashUnblockQueue(orgId: string, userId?: string): UnblockQueu
 export function getUnblockQueueSummary(orgId: string): QueueSummaryMetrics {
   const queue = getCashUnblockQueue(orgId);
 
+  // Recovered cash is derived from verified, persisted payment allocations
+  // (matches) for this organization — not fabricated.
+  udmStore.setTenantContext(orgId);
+  const matches = udmStore.getMatches();
+  const recoveredCashMinorUnits = matches.reduce((sum, m) => sum + m.matched_amount_minor_units, 0);
+
   let totalCashAffected = 0;
   let actionableCash = 0;
   let criticalCount = 0;
@@ -214,7 +221,7 @@ export function getUnblockQueueSummary(orgId: string): QueueSummaryMetrics {
   return {
     totalCashAffectedMinorUnits: totalCashAffected,
     actionableCashMinorUnits: actionableCash,
-    recoveredCashMinorUnits: 0,
+    recoveredCashMinorUnits,
     criticalCount,
     dueTodayCount,
     waitingCount,

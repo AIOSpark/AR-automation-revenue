@@ -10,6 +10,7 @@ import { ExecutionRecord, ExecutionContext, ActionType } from './types';
 import { durableVerifier } from './durable-verifier';
 import crypto from 'crypto';
 import { getRequestTenant } from '../tenant/request-context';
+import { validatePilotReadOnly } from '../auth/pilot';
 
 function hashPayload(payload: any): string {
   const str = JSON.stringify(payload, Object.keys(payload).sort());
@@ -69,6 +70,14 @@ export class ExecutionService {
     // Verify organization ownership
     if (approval.organization_id !== context.organizationId) {
       throw new Error('Cross-tenant execution denied');
+    }
+
+    // Pilot-mode enforcement: financial mutations are blocked for pilot orgs
+    const pilotError = validatePilotReadOnly(context.organizationId, 'FINANCIAL_TRANSACTION');
+    if (pilotError) {
+      throw new Error(
+        'Read-only pilot mode: financial mutations and external writebacks are disabled. Use simulation mode for scenario analysis.'
+      );
     }
 
     // Verify approval status

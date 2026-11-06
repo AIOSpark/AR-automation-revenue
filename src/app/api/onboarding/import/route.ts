@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { importEngine } from '@/lib/import/engine';
 import { resolveTenantContext, validatePermission } from '@/lib/tenant/middleware';
+import { validatePilotReadOnly } from '@/lib/auth/pilot';
 
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const MAX_IMPORT_ROWS = 10_000;
@@ -19,6 +20,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { sourceSystem = 'csv', rows, dateFormatConvention, columnMapping } = body;
     const organizationId = context!.organization.id;
+
+    const pilotError = validatePilotReadOnly(organizationId, 'CUSTOMER_RECORD_MUTATION');
+    if (pilotError) return pilotError;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'A non-empty rows array is required' }, { status: 400 });

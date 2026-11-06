@@ -79,6 +79,21 @@ class MultiTenantStore {
   }
 
   /**
+   * Asserts the active request tenant context matches the write target organization.
+   * Prevents cross-tenant writes at the application storage layer (the active
+   * runtime persistence mechanism; PostgreSQL RLS is not the active database).
+   */
+  private assertWriteTenant(organizationId: string): void {
+    const activeTenant = getRequestTenant();
+    // A null context means no session has been established; the API middleware
+    // sets context before any write. Reject writes when context is null or does
+    // not match the write target organization.
+    if (!activeTenant || activeTenant !== organizationId) {
+      throw new Error('Tenant write denied outside the active organization context');
+    }
+  }
+
+  /**
    * Adds or updates a user membership in an organization with a specific role
    */
   public addMember(userId: string, orgId: string, role: Role, actorUserId?: string): OrgMemberRecord {
@@ -260,6 +275,8 @@ class MultiTenantStore {
     const tableMap = this.tenantTables.get(tableName) || new Map();
     const id = `rec_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
     
+    this.assertWriteTenant(record.organization_id as string);
+
     const fullRecord = {
       ...record,
       id,

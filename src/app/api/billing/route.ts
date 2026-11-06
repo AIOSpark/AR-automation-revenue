@@ -47,6 +47,9 @@ export async function POST(request: Request) {
     const { action, planId, customerGstin, customerLegalName, customerStateCode } = body;
     const organizationId = context!.organization.id;
 
+    const pilotError = validatePilotReadOnly(organizationId, 'FINANCIAL_TRANSACTION');
+    if (pilotError) return pilotError;
+
     if (action === 'create_subscription') {
       if (!isPlanTier(planId) || planId === 'enterprise' || (body.interval !== 'monthly' && body.interval !== 'annual')) {
         return NextResponse.json({ success: false, error: 'A supported plan and billing interval are required' }, { status: 400 });

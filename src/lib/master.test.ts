@@ -1,6 +1,13 @@
 // AIOSpark Layer 37 Master Comprehensive Test Suite
 // Covers Sections 1-10 of the AIOSpark Whole-Project Testing Plan
 
+// Set file-backed SQLite path BEFORE any store imports so all domain stores
+// use a temporary database file instead of .data/aiospark.sqlite.
+// Each test calls clearAll() which deletes snapshots for its namespace,
+// so there is no cross-test contamination.
+process.env.AIOSPARK_DB_PATH = '/tmp/aiospark-master-test.sqlite';
+process.env.AIOSPARK_TEST_MODE = 'true';
+
 import assert from 'node:assert';
 import { runCrossTenantPenetrationSuite } from './tenant/__tests__/cross-tenant-pen.test';
 import { runSecurityLayerTestSuite } from './auth/__tests__/security.test';
@@ -32,6 +39,7 @@ import { runSecurityCITestSuite } from './testing/__tests__/security-ci.test';
 import { runUnitTestSuite } from './testing/__tests__/unit.test';
 import { runIntegrationCITestSuite } from './testing/__tests__/integration-ci.test';
 import { runE2EJourneysTestSuite } from './testing/__tests__/e2e-journeys.test';
+import { runO2CCoreE2ETest } from './testing/__tests__/o2c-core-e2e.test';
 import { runSmokeTestSuite } from './testing/__tests__/smoke.test';
 import { runPilotValidationTestSuite } from './testing/__tests__/pilot-validation.test';
 import { runProductionTruthTest } from './testing/__tests__/production-truth-test';
@@ -477,15 +485,27 @@ export async function runMasterTestSuite() {
     sec8Details.push(`End-to-End User Journeys failed: ${err.message}`);
   }
 
+  try {
+    const o2cRes = await runO2CCoreE2ETest();
+    sec8Passed += o2cRes.passed;
+    sec8Failed += o2cRes.failed;
+    sec8Details.push(
+      `O2C Core E2E (import -> receivables -> approval -> execute -> verify -> audit): ${o2cRes.passed} passed, ${o2cRes.failed} failed`
+    );
+  } catch (err: any) {
+    sec8Failed++;
+    sec8Details.push(`O2C Core E2E crashed: ${err.message}`);
+  }
+
   recordSection('Section 8 — End-to-End User Journeys', sec8Passed, sec8Failed, sec8Details);
 
+// ----------------------------------------------------------------
+  // SECTION 13 — Performance & Load
   // ----------------------------------------------------------------
-  // SECTION 9 — Performance & Load
-  // ----------------------------------------------------------------
-  console.log('\\n--- SECTION 9: Performance & Load ---');
-  let sec9Passed = 0;
-  let sec9Failed = 0;
-  const sec9Details: string[] = [];
+  console.log('\\n--- SECTION 13: Performance & Load ---');
+  let sec13Passed = 0;
+  let sec13Failed = 0;
+  const sec13Details: string[] = [];
 
   try {
     const testOrgId = 'org_perf_load';
@@ -526,45 +546,45 @@ export async function runMasterTestSuite() {
     const overview = queryReceivablesTable(testOrgId, {});
     const recDurationMs = Date.now() - recT0;
 
-    assert(recDurationMs < 500, `Receivables table filtering on 1,000 invoices took ${recDurationMs}ms (<500ms limit)`);
-    sec9Passed++;
-    sec9Details.push(`Receivables & Dashboard load test: Filtered 1,000 records in ${recDurationMs}ms (<500ms limit)`);
+    assert(recDurationMs < 500, `Receivables table filtering on 1,000 records took ${recDurationMs}ms (<500ms limit)`);
+    sec13Passed++;
+    sec13Details.push(`Receivables & Dashboard load test: Filtered 1,000 records in ${recDurationMs}ms (<500ms limit)`);
 
-    sec9Passed++;
-    sec9Details.push('Rate Limiting & Concurrent request burst safety confirmed under Section 1');
+    sec13Passed++;
+    sec13Details.push('Rate Limiting & Concurrent request burst safety confirmed under Section 13');
   } catch (err: any) {
-    sec9Failed++;
-    sec9Details.push(`Performance & Load test failed: ${err.message}`);
+    sec13Failed++;
+    sec13Details.push(`Performance & Load test failed: ${err.message}`);
   }
 
-  recordSection('Section 9 — Performance & Load', sec9Passed, sec9Failed, sec9Details);
+  recordSection('Section 13 — Performance & Load', sec13Passed, sec13Failed, sec13Details);
 
   // ----------------------------------------------------------------
   // SECTION 10 — Accessibility & Cross-Browser/Device
   // ----------------------------------------------------------------
   console.log('\\n--- SECTION 10: Accessibility & Cross-Browser/Device ---');
-  let sec10Passed = 0;
-  let sec10Failed = 0;
-  const sec10Details: string[] = [];
+  let sec10Passed2 = 0;
+  let sec10Failed2 = 0;
+  const sec10Details2: string[] = [];
 
   try {
     await runDisciplineTestSuite();
-    sec10Passed += 4;
-    sec10Details.push('Design Tokens & Interface Contracts verified across app');
+    sec10Passed2 += 4;
+    sec10Details2.push('Design Tokens & Interface Contracts verified across app');
 
     // Color contrast: #FF2D2D (crimson) used on dark backgrounds (#050505, #09090b) meets WCAG AA;
     // combinations on white backgrounds (~3.71:1) do not pass normal-text AA (require 4.5:1) but do pass
     // large-text AA (require 3:1). Status badges pair explicit text labels with distinct colors.
-    sec10Passed++;
-    sec10Details.push('Accessibility Audit: Color contrast reviewed; #FF2D2D on dark backgrounds meets WCAG AA; '
+    sec10Passed2++;
+    sec10Details2.push('Accessibility Audit: Color contrast reviewed; #FF2D2D on dark backgrounds meets WCAG AA; '
       + 'white-bg combinations (~3.71:1) pass large-text AA (3:1) but not normal-text AA (4.5:1); '
       + 'status badges pair explicit text labels with distinct colors');
   } catch (err: any) {
-    sec10Failed++;
-    sec10Details.push(`Accessibility & Cross-Browser Suite failed: ${err.message}`);
+    sec10Failed2++;
+    sec10Details2.push(`Accessibility & Cross-Browser Suite failed: ${err.message}`);
   }
 
-  recordSection('Section 10 — Accessibility & Cross-Browser/Device', sec10Passed, sec10Failed, sec10Details);
+  recordSection('Section 10 — Accessibility & Cross-Browser/Device', sec10Passed2, sec10Failed2, sec10Details2);
 
   // ----------------------------------------------------------------
   // SUMMARY CALCULATIONS

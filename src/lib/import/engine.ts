@@ -2,6 +2,7 @@
 
 import { udmStore } from '../udm/store';
 import { Customer, Invoice } from '../udm/types';
+import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
 
 export interface ImportBatchRecord {
   id: string;
@@ -50,6 +51,27 @@ class ImportPipelineEngine {
   private errors: Map<string, ImportErrorRecord> = new Map();
   private duplicates: Map<string, PossibleDuplicateRecord> = new Map();
 
+  constructor() {
+    const state = readSnapshot<{
+      batches: ImportBatchRecord[];
+      errors: ImportErrorRecord[];
+      duplicates: PossibleDuplicateRecord[];
+    }>('import_batches');
+    if (state) {
+      this.batches = new Map(state.batches.map((b) => [b.id, b]));
+      this.errors = new Map(state.errors.map((e) => [e.id, e]));
+      this.duplicates = new Map(state.duplicates.map((d) => [d.id, d]));
+    }
+  }
+
+  private persist(): void {
+    writeSnapshot('import_batches', {
+      batches: Array.from(this.batches.values()),
+      errors: Array.from(this.errors.values()),
+      duplicates: Array.from(this.duplicates.values()),
+    });
+  }
+
   // STAGE 1: UPLOAD (Durable Raw Input Persistence)
   public createBatch(config: ImportPipelineConfig, rawRows: any[]): ImportBatchRecord {
     const id = `batch_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
@@ -67,6 +89,7 @@ class ImportPipelineEngine {
       started_at: now,
     };
     this.batches.set(id, batch);
+    this.persist();
     return batch;
   }
 
@@ -264,6 +287,8 @@ class ImportPipelineEngine {
     batch.skipped_count = skippedCount;
     batch.completed_at = new Date().toISOString();
 
+    this.persist();
+
     const summaryStr = `${successCount.toLocaleString()} invoices imported successfully, ${skippedCount} skipped — view details.`;
 
     return {
@@ -285,6 +310,7 @@ class ImportPipelineEngine {
     this.batches.clear();
     this.errors.clear();
     this.duplicates.clear();
+    deleteSnapshot('import_batches');
   }
 }
 

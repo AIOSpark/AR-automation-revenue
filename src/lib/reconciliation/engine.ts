@@ -7,6 +7,7 @@ import { BankTransaction, Invoice, PaymentInvoiceMatch } from '../udm/types';
 import { approvalStore, ApprovalRequest } from '../approvals/store';
 import { policyEngine } from '../agents/policy-engine';
 import { dashboardMetricsStore } from '../dashboard/engine';
+import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
 
 export interface ProposedMatch {
   bankTransactionId: string;
@@ -39,6 +40,23 @@ export interface MatchOutcomeRecord {
 
 export class ReconciliationEngine {
   private outcomes: Map<string, MatchOutcomeRecord> = new Map();
+
+  /**
+   * Persists reconciliation outcomes to the durable snapshot store so that
+   * match-outcome audit history survives application restarts.
+   */
+  private persist(): void {
+    writeSnapshot<MatchOutcomeRecord[]>('reconciliation_outcomes', Array.from(this.outcomes.values()));
+  }
+
+  constructor() {
+    const persisted = readSnapshot<MatchOutcomeRecord[]>('reconciliation_outcomes');
+    if (persisted) {
+      for (const record of persisted) {
+        this.outcomes.set(record.id, record);
+      }
+    }
+  }
 
   /**
    * Helper: Normalize string for fuzzy matching (lowercase, strip non-alphanumeric)
@@ -419,6 +437,7 @@ export class ReconciliationEngine {
       created_at: new Date().toISOString(),
     };
     this.outcomes.set(outcomeRecord.id, outcomeRecord);
+    this.persist();
 
     // Wire into Layer 26 Audit Log
     for (const invId of invoiceIds) {
@@ -486,6 +505,7 @@ export class ReconciliationEngine {
       created_at: new Date().toISOString(),
     };
     this.outcomes.set(outcomeRecord.id, outcomeRecord);
+    this.persist();
 
     return { success: true };
   }
@@ -496,6 +516,7 @@ export class ReconciliationEngine {
 
   public clearAll(): void {
     this.outcomes.clear();
+    deleteSnapshot('reconciliation_outcomes');
   }
 }
 

@@ -24,5 +24,11 @@ export function getAuthSigningSecret(): string | null {
   const configured = process.env.AIOSPARK_SESSION_SECRET;
   if (configured) return configured;
   if (isDevAuthEnabled()) return DEVELOPMENT_SIGNING_SECRET;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Production authentication requires AIOSPARK_SESSION_SECRET to be set. " +
+      "Development session secrets are not usable in production."
+    );
+  }
   return null;
 }

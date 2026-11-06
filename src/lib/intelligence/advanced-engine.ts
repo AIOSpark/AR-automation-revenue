@@ -12,21 +12,21 @@ export interface CausalGraphNode {
   amountMinorUnits?: number;
   status: string;
   children: CausalGraphNode[];
-  provenance?: 'VERIFIED' | 'AI_INFERRED' | 'UNKNOWN';
+  provenance?: 'VERIFIED' | 'RULE_INFERRED' | 'AI_INFERRED' | 'UNKNOWN';
   metadata?: Record<string, unknown>;
 }
 
 export interface CausalGraph {
   root: CausalGraphNode;
   nodes: CausalGraphNode[];
-  edges: Array<{ from: string; to: string; label: string; provenance?: 'VERIFIED' | 'AI_INFERRED' | 'UNKNOWN' }>;
+  edges: Array<{ from: string; to: string; label: string; provenance?: 'VERIFIED' | 'RULE_INFERRED' | 'AI_INFERRED' | 'UNKNOWN' }>;
   cashImpactMinorUnits: number;
 }
 
 export interface CausalChainSummary {
   root: CausalGraphNode;
   nodes: CausalGraphNode[];
-  edges: Array<{ from: string; to: string; label: string; provenance?: 'VERIFIED' | 'AI_INFERRED' | 'UNKNOWN' }>;
+  edges: Array<{ from: string; to: string; label: string; provenance?: 'VERIFIED' | 'RULE_INFERRED' | 'AI_INFERRED' | 'UNKNOWN' }>;
   cashImpactMinorUnits: number;
   customerName: string;
   invoiceNumber: string;
@@ -125,7 +125,7 @@ export function buildCausalChain(invoiceId: string, orgId: string): CausalChainS
     amountMinorUnits: invoice.amount_minor_units,
     status: invoice.status,
     children: [],
-    provenance: 'VERIFIED',
+    provenance: 'RULE_INFERRED',
     metadata: { source: 'UDM', recordType: 'invoice' },
   };
 
@@ -138,7 +138,7 @@ export function buildCausalChain(invoiceId: string, orgId: string): CausalChainS
       amountMinorUnits: customer.credit_limit_minor_units,
       status: 'active',
       children: [],
-      provenance: 'VERIFIED',
+      provenance: 'RULE_INFERRED',
       metadata: { source: 'UDM', recordType: 'customer' },
     });
   }
@@ -151,7 +151,7 @@ export function buildCausalChain(invoiceId: string, orgId: string): CausalChainS
       amount: undefined,
       status: exc.status,
       children: [],
-      provenance: 'VERIFIED',
+      provenance: 'RULE_INFERRED',
       metadata: { source: 'UDM', recordType: 'exception', exceptionType: exc.type },
     });
   });
@@ -165,7 +165,7 @@ export function buildCausalChain(invoiceId: string, orgId: string): CausalChainS
       amountMinorUnits: pay.amount_minor_units,
       status: 'completed',
       children: [],
-      provenance: 'VERIFIED',
+      provenance: 'RULE_INFERRED',
       metadata: { source: 'UDM', recordType: 'payment' },
     });
   });
@@ -177,7 +177,7 @@ export function buildCausalChain(invoiceId: string, orgId: string): CausalChainS
       from: root.id,
       to: c.id,
       label: 'related_to',
-      provenance: 'VERIFIED' as const,
+      provenance: 'RULE_INFERRED' as const,
     })),
     cashImpactMinorUnits: invoice.amount_minor_units,
     customerName: customer?.name || 'Unknown Customer',
