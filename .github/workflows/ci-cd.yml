@@ -1,0 +1,84 @@
+name: AIOSpark Automated Release & Quality Gate Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-gate:
+    name: AIOSpark Quality & Release Security Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Project Dependencies
+        run: npm ci
+
+      - name: Gate 1 — Static Validation (ESLint)
+        run: npm run lint
+
+      - name: Gate 2 — Type Validation (TypeScript Compiler)
+        run: npm run typecheck
+
+      - name: Gate 3 — Secret & Dependency Security Scan
+        run: npm run test:scan
+
+      - name: Gate 4 — Isolated Unit Tests
+        run: npm run test:unit
+
+      - name: Gate 5 — Enterprise Integration Tests
+        run: npm run test:integration
+
+      - name: Gate 6 — Security, RLS & Tenant Isolation Tests
+        run: npm run test:security
+
+      - name: Gate 7 — Financial Correctness & Golden Tests
+        run: npm run test:financial
+
+      - name: Gate 8 — Master Verification Suite
+        run: npm run test:master
+
+      - name: Gate 9 — Production Next.js Optimized Build
+        run: npm run build
+
+      - name: Gate 10 — Critical End-to-End User Journeys
+        run: npm run test:e2e
+
+      - name: Gate 11 — Post-Deployment Smoke & Health Verification
+        run: npm run test:smoke
+
+      - name: Gate 12 — Real Staging ERP, Email & Deployment Verification
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.AIOSPARK_DEPLOYMENT_URL != '' }}
+        env:
+          AIOSPARK_DEPLOYMENT_URL: ${{ secrets.AIOSPARK_DEPLOYMENT_URL }}
+          ZOHO_ACCESS_TOKEN: ${{ secrets.ZOHO_ACCESS_TOKEN }}
+          ZOHO_BOOKS_ORGANIZATION_ID: ${{ secrets.ZOHO_BOOKS_ORGANIZATION_ID }}
+          ZOHO_BOOKS_API_DOMAIN: ${{ secrets.ZOHO_BOOKS_API_DOMAIN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          AIOSPARK_EXTERNAL_TEST_EMAIL: ${{ secrets.AIOSPARK_EXTERNAL_TEST_EMAIL }}
+          AIOSPARK_ALLOW_EXTERNAL_EMAIL_TEST: 'true'
+        run: npm run test:external
+
+      - name: Generate Production Release Notes & Changelog
+        if: github.ref == 'refs/heads/main'
+        run: node scripts/generate-changelog.mjs
+
+      - name: Upload Build Artifacts & Release Notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiospark-release-artifact-${{ github.sha }}
+          path: |
+            .next
+            RELEASE_NOTES.md
+          retention-days: 7

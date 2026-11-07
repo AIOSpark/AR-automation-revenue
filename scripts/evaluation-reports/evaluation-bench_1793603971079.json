@@ -1,0 +1,680 @@
+{
+  "evaluationId": "bench_1793603971079",
+  "timestamp": "2026-11-02T07:19:31.079Z",
+  "totalCases": 100,
+  "stagesCompleted": [
+    "SMOKE"
+  ],
+  "executionMode": "SMOKE_ONLY",
+  "providers": [
+    {
+      "provider": "google",
+      "modelId": "gemini-3.8-flash",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {
+        "INCORRECT_FINANCIAL_AMOUNT": 3
+      },
+      "latencyP50Ms": 6834,
+      "latencyP95Ms": 7888,
+      "averageTokens": 0,
+      "totalCostUsd": null,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [
+            {
+              "dimension": "EVIDENCE_ACCURACY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "FINANCIAL_REASONING",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "ROOT_CAUSE_DIAGNOSIS",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "NEXT_BEST_ACTION_QUALITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No next-best-action produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "STRUCTURED_OUTPUT_VALIDITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Schema validation failed: LLM unavailable"
+              ],
+              "passed": false
+            }
+          ],
+          "safetyGateViolations": [
+            "INCORRECT_FINANCIAL_AMOUNT"
+          ],
+          "passed": false,
+          "timestamp": "2026-11-02T07:19:37.916Z"
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [
+            {
+              "dimension": "EVIDENCE_ACCURACY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "FINANCIAL_REASONING",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "ROOT_CAUSE_DIAGNOSIS",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "NEXT_BEST_ACTION_QUALITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No next-best-action produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "STRUCTURED_OUTPUT_VALIDITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Schema validation failed: LLM unavailable"
+              ],
+              "passed": false
+            }
+          ],
+          "safetyGateViolations": [
+            "INCORRECT_FINANCIAL_AMOUNT"
+          ],
+          "passed": false,
+          "timestamp": "2026-11-02T07:19:45.804Z"
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [
+            {
+              "dimension": "EVIDENCE_ACCURACY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "FINANCIAL_REASONING",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "ROOT_CAUSE_DIAGNOSIS",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "NEXT_BEST_ACTION_QUALITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No next-best-action produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "STRUCTURED_OUTPUT_VALIDITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Schema validation failed: LLM unavailable"
+              ],
+              "passed": false
+            }
+          ],
+          "safetyGateViolations": [
+            "INCORRECT_FINANCIAL_AMOUNT"
+          ],
+          "passed": false,
+          "timestamp": "2026-11-02T07:19:51.535Z"
+        }
+      ],
+      "totalInvocations": 3
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-4",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {
+        "INCORRECT_FINANCIAL_AMOUNT": 3
+      },
+      "latencyP50Ms": 17401,
+      "latencyP95Ms": 22735,
+      "averageTokens": 0,
+      "totalCostUsd": null,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-4",
+          "overallScore": 0,
+          "dimensionScores": [
+            {
+              "dimension": "EVIDENCE_ACCURACY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "FINANCIAL_REASONING",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "ROOT_CAUSE_DIAGNOSIS",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "NEXT_BEST_ACTION_QUALITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No next-best-action produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "STRUCTURED_OUTPUT_VALIDITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Schema validation failed: LLM unavailable"
+              ],
+              "passed": false
+            }
+          ],
+          "safetyGateViolations": [
+            "INCORRECT_FINANCIAL_AMOUNT"
+          ],
+          "passed": false,
+          "timestamp": "2026-11-02T07:20:14.270Z"
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-4",
+          "overallScore": 0,
+          "dimensionScores": [
+            {
+              "dimension": "EVIDENCE_ACCURACY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "FINANCIAL_REASONING",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "ROOT_CAUSE_DIAGNOSIS",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "NEXT_BEST_ACTION_QUALITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No next-best-action produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "STRUCTURED_OUTPUT_VALIDITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Schema validation failed: LLM unavailable"
+              ],
+              "passed": false
+            }
+          ],
+          "safetyGateViolations": [
+            "INCORRECT_FINANCIAL_AMOUNT"
+          ],
+          "passed": false,
+          "timestamp": "2026-11-02T07:20:22.774Z"
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-4",
+          "overallScore": 0,
+          "dimensionScores": [
+            {
+              "dimension": "EVIDENCE_ACCURACY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "FINANCIAL_REASONING",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "ROOT_CAUSE_DIAGNOSIS",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No AI analysis produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "NEXT_BEST_ACTION_QUALITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No next-best-action produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "STRUCTURED_OUTPUT_VALIDITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Schema validation failed: LLM unavailable"
+              ],
+              "passed": false
+            }
+          ],
+          "safetyGateViolations": [
+            "INCORRECT_FINANCIAL_AMOUNT"
+          ],
+          "passed": false,
+          "timestamp": "2026-11-02T07:20:40.175Z"
+        }
+      ],
+      "totalInvocations": 3
+    },
+    {
+      "provider": "mistral-small",
+      "modelId": "mistral-small-2603",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 0,
+      "skippedCases": 3,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {},
+      "latencyP50Ms": 0,
+      "latencyP95Ms": 0,
+      "averageTokens": 0,
+      "totalCostUsd": null,
+      "categoryScores": {},
+      "caseScores": [],
+      "totalInvocations": 0
+    }
+  ],
+  "decisionTable": [
+    {
+      "workload": "Invoice Extraction",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Evidence accuracy and cost",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": null,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": null,
+      "geminiLatencyMs": 6834,
+      "mistralLargeLatencyMs": 17401,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 0,
+      "safetyDisqualifiedProviders": [
+        "google:gemini-3.8-flash",
+        "mistral:mistral-large-4"
+      ]
+    },
+    {
+      "workload": "PO Mismatch Diagnosis",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Evidence accuracy",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": null,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": null,
+      "geminiLatencyMs": 6834,
+      "mistralLargeLatencyMs": 17401,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 0,
+      "safetyDisqualifiedProviders": [
+        "google:gemini-3.8-flash",
+        "mistral:mistral-large-4"
+      ]
+    },
+    {
+      "workload": "Overdue Investigation",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Root-cause accuracy",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": null,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": null,
+      "geminiLatencyMs": 6834,
+      "mistralLargeLatencyMs": 17401,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 0,
+      "safetyDisqualifiedProviders": [
+        "google:gemini-3.8-flash",
+        "mistral:mistral-large-4"
+      ]
+    },
+    {
+      "workload": "Payment Reconciliation",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Financial correctness",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": null,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": null,
+      "geminiLatencyMs": 6834,
+      "mistralLargeLatencyMs": 17401,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 0,
+      "safetyDisqualifiedProviders": [
+        "google:gemini-3.8-flash",
+        "mistral:mistral-large-4"
+      ]
+    },
+    {
+      "workload": "Complex Recovery Strategy",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Recommendation quality",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": null,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": null,
+      "geminiLatencyMs": 6834,
+      "mistralLargeLatencyMs": 17401,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 0,
+      "safetyDisqualifiedProviders": [
+        "google:gemini-3.8-flash",
+        "mistral:mistral-large-4"
+      ]
+    }
+  ],
+  "safetyGateSummary": {
+    "INCORRECT_FINANCIAL_AMOUNT": 6
+  },
+  "recommendations": [
+    "Best overall provider: google (gemini-3.8-flash) with score 0",
+    "google (gemini-3.8-flash) has 3 safety gate violation(s) — review before production use",
+    "mistral (mistral-large-4) has 3 safety gate violation(s) — review before production use"
+  ],
+  "limitations": [
+    "Providers skipped (no credentials): mistral-small",
+    "Full benchmark not completed — results are from smoke/pilot stages only",
+    "Evaluation uses synthetic data — real ERP data validation is pending",
+    "Live model invocation required for accurate scoring"
+  ],
+  "totalCostUsd": null,
+  "totalInvocations": 6,
+  "costTrackingRecords": [
+    {
+      "provider": "google",
+      "modelId": "gemini-3.8-flash",
+      "stage": "SMOKE",
+      "caseId": "CASE-DISC-001",
+      "invocationId": "inv_1793603971081_dciv6",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "costUsd": null,
+      "latencyMs": 6834,
+      "timestamp": "2026-11-02T07:19:37.915Z",
+      "status": "FAILURE"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.8-flash",
+      "stage": "SMOKE",
+      "caseId": "CASE-OVERDUE-001",
+      "invocationId": "inv_1793603977916_61wst",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "costUsd": null,
+      "latencyMs": 7888,
+      "timestamp": "2026-11-02T07:19:45.804Z",
+      "status": "FAILURE"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.8-flash",
+      "stage": "SMOKE",
+      "caseId": "CASE-PO-001",
+      "invocationId": "inv_1793603985804_icvmz",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "costUsd": null,
+      "latencyMs": 5730,
+      "timestamp": "2026-11-02T07:19:51.534Z",
+      "status": "FAILURE"
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-4",
+      "stage": "SMOKE",
+      "caseId": "CASE-DISC-001",
+      "invocationId": "inv_1793603991535_y6ys4",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "costUsd": null,
+      "latencyMs": 22735,
+      "timestamp": "2026-11-02T07:20:14.270Z",
+      "status": "FAILURE"
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-4",
+      "stage": "SMOKE",
+      "caseId": "CASE-OVERDUE-001",
+      "invocationId": "inv_1793604014270_naqmc",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "costUsd": null,
+      "latencyMs": 8504,
+      "timestamp": "2026-11-02T07:20:22.774Z",
+      "status": "FAILURE"
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-4",
+      "stage": "SMOKE",
+      "caseId": "CASE-PO-001",
+      "invocationId": "inv_1793604022774_g2qvm",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "costUsd": null,
+      "latencyMs": 17401,
+      "timestamp": "2026-11-02T07:20:40.175Z",
+      "status": "FAILURE"
+    }
+  ],
+  "reproducibility": {
+    "datasetVersion": "gold-dataset-v1.0",
+    "promptVersion": "invoice-investigation-v1.0",
+    "modelIdentifier": "{\"google\":\"gemini-3.8-flash\",\"mistral\":\"mistral-large-4\",\"mistral-small\":\"mistral-small-2603\"}",
+    "evaluationConfigHash": "1403473373",
+    "invocationTimestamp": "2026-11-02T07:19:31.079Z",
+    "scoringConfigHash": "scoring-v1.0"
+  },
+  "inFlightReservations": [],
+  "duplicateInvocations": []
+}

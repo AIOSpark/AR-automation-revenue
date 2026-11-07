@@ -1,0 +1,340 @@
+{
+  "evaluationId": "bench_1793674843772",
+  "timestamp": "2026-11-03T03:00:43.772Z",
+  "totalCases": 100,
+  "stagesCompleted": [
+    "SMOKE"
+  ],
+  "executionMode": "SMOKE_ONLY",
+  "providers": [
+    {
+      "provider": "google",
+      "modelId": "gemini-3.8-flash",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {},
+      "latencyP50Ms": 0,
+      "latencyP95Ms": 0,
+      "averageTokens": null,
+      "totalCostUsd": 0,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-03T03:00:43.775Z",
+          "errorMessage": "No LLM provider is configured. Set GEMINI_API_KEY, MISTRAL_API_KEY, or OPENAI_API_KEY environment variable."
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-03T03:00:43.775Z",
+          "errorMessage": "No LLM provider is configured. Set GEMINI_API_KEY, MISTRAL_API_KEY, or OPENAI_API_KEY environment variable."
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-03T03:00:43.776Z",
+          "errorMessage": "No LLM provider is configured. Set GEMINI_API_KEY, MISTRAL_API_KEY, or OPENAI_API_KEY environment variable."
+        }
+      ],
+      "totalInvocations": 3
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-latest",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {},
+      "latencyP50Ms": 0,
+      "latencyP95Ms": 0,
+      "averageTokens": null,
+      "totalCostUsd": 0,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-latest",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-03T03:00:44.341Z",
+          "errorMessage": "LLM provider error (401): {\"detail\":\"Invalid API Key\"}\n"
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-latest",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-03T03:00:44.681Z",
+          "errorMessage": "LLM provider error (401): {\"detail\":\"Invalid API Key\"}\n"
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-latest",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-03T03:00:45.012Z",
+          "errorMessage": "LLM provider error (401): {\"detail\":\"Invalid API Key\"}\n"
+        }
+      ],
+      "totalInvocations": 3
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-small-2603",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {},
+      "latencyP50Ms": 0,
+      "latencyP95Ms": 0,
+      "averageTokens": null,
+      "totalCostUsd": 0,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-small-2603",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-03T03:00:45.361Z",
+          "errorMessage": "LLM provider error (401): {\"detail\":\"Invalid API Key\"}\n"
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-small-2603",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-03T03:00:45.701Z",
+          "errorMessage": "LLM provider error (401): {\"detail\":\"Invalid API Key\"}\n"
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-small-2603",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-03T03:00:46.029Z",
+          "errorMessage": "LLM provider error (401): {\"detail\":\"Invalid API Key\"}\n"
+        }
+      ],
+      "totalInvocations": 3
+    }
+  ],
+  "decisionTable": [
+    {
+      "workload": "Invoice Extraction",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Evidence accuracy and cost",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 0,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    },
+    {
+      "workload": "PO Mismatch Diagnosis",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Evidence accuracy",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 0,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    },
+    {
+      "workload": "Overdue Investigation",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Root-cause accuracy",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 0,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    },
+    {
+      "workload": "Payment Reconciliation",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Financial correctness",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 0,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    },
+    {
+      "workload": "Complex Recovery Strategy",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Recommendation quality",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 0,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    }
+  ],
+  "safetyGateSummary": {},
+  "recommendations": [
+    "All live provider invocations failed before producing a score. No winner recommended.",
+    "First observed error: No LLM provider is configured. Set GEMINI_API_KEY, MISTRAL_API_KEY, or OPENAI_API_KEY environment variable."
+  ],
+  "limitations": [
+    "Models invoked but with zero passing cases: google/gemini-3.8-flash, mistral/mistral-large-latest, mistral/mistral-small-2603",
+    "Full benchmark not completed — results are from smoke/pilot stages only",
+    "Evaluation uses synthetic data — real ERP data validation is pending"
+  ],
+  "totalCostUsd": null,
+  "totalInvocations": 9,
+  "costTrackingRecords": [],
+  "reproducibility": {
+    "datasetVersion": "gold-dataset-v1.0",
+    "promptVersion": "invoice-investigation-v1.0",
+    "modelIdentifier": "{\"google\":\"gemini-3.8-flash\",\"mistral\":\"mistral-large-latest\",\"mistral-small\":\"mistral-small-2603\"}",
+    "evaluationConfigHash": "1314511278",
+    "invocationTimestamp": "2026-11-03T03:00:43.772Z",
+    "scoringConfigHash": "scoring-v1.0"
+  },
+  "inFlightReservations": [],
+  "duplicateInvocations": []
+}

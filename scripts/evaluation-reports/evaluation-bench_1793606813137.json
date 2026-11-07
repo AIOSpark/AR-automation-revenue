@@ -1,0 +1,330 @@
+{
+  "evaluationId": "bench_1793606813137",
+  "timestamp": "2026-11-02T08:06:53.137Z",
+  "totalCases": 100,
+  "stagesCompleted": [
+    "SMOKE"
+  ],
+  "executionMode": "SMOKE_ONLY",
+  "providers": [
+    {
+      "provider": "google",
+      "modelId": "gemini-3.8-flash",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {},
+      "latencyP50Ms": 0,
+      "latencyP95Ms": 0,
+      "averageTokens": null,
+      "totalCostUsd": 0,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:06:53.166Z"
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:06:53.167Z"
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:06:53.168Z"
+        }
+      ],
+      "totalInvocations": 3
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-4",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {},
+      "latencyP50Ms": 0,
+      "latencyP95Ms": 0,
+      "averageTokens": null,
+      "totalCostUsd": 0,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-4",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:06:53.169Z"
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-4",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:06:53.170Z"
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-4",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:06:53.171Z"
+        }
+      ],
+      "totalInvocations": 3
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-small-2603",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {},
+      "latencyP50Ms": 0,
+      "latencyP95Ms": 0,
+      "averageTokens": null,
+      "totalCostUsd": 0,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-small-2603",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:06:53.172Z"
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-small-2603",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:06:53.173Z"
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-small-2603",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:06:53.174Z"
+        }
+      ],
+      "totalInvocations": 3
+    }
+  ],
+  "decisionTable": [
+    {
+      "workload": "Invoice Extraction",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Evidence accuracy and cost",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": 0,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    },
+    {
+      "workload": "PO Mismatch Diagnosis",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Evidence accuracy",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": 0,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    },
+    {
+      "workload": "Overdue Investigation",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Root-cause accuracy",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": 0,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    },
+    {
+      "workload": "Payment Reconciliation",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Financial correctness",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": 0,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    },
+    {
+      "workload": "Complex Recovery Strategy",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Recommendation quality",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": 0,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 0,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": []
+    }
+  ],
+  "safetyGateSummary": {},
+  "recommendations": [
+    "No providers were tested live. Configure API credentials to run live benchmarking."
+  ],
+  "limitations": [
+    "Full benchmark not completed — results are from smoke/pilot stages only",
+    "Evaluation uses synthetic data — real ERP data validation is pending",
+    "Live model invocation required for accurate scoring"
+  ],
+  "totalCostUsd": null,
+  "totalInvocations": 9,
+  "costTrackingRecords": [],
+  "reproducibility": {
+    "datasetVersion": "gold-dataset-v1.0",
+    "promptVersion": "invoice-investigation-v1.0",
+    "modelIdentifier": "{\"google\":\"gemini-3.8-flash\",\"mistral\":\"mistral-large-4\",\"mistral-small\":\"mistral-small-2603\"}",
+    "evaluationConfigHash": "956199803",
+    "invocationTimestamp": "2026-11-02T08:06:53.137Z",
+    "scoringConfigHash": "scoring-v1.0"
+  },
+  "inFlightReservations": [],
+  "duplicateInvocations": []
+}

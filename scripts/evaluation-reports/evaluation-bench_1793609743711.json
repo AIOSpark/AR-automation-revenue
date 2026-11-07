@@ -1,0 +1,558 @@
+{
+  "evaluationId": "bench_1793609743711",
+  "timestamp": "2026-11-02T08:55:43.711Z",
+  "totalCases": 100,
+  "stagesCompleted": [
+    "SMOKE"
+  ],
+  "executionMode": "SMOKE_ONLY",
+  "providers": [
+    {
+      "provider": "google",
+      "modelId": "gemini-3.8-flash",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {},
+      "latencyP50Ms": 0,
+      "latencyP95Ms": 0,
+      "averageTokens": null,
+      "totalCostUsd": 0,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:56:37.657Z",
+          "errorMessage": "LLM provider error (503): [{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n]"
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:57:26.188Z",
+          "errorMessage": "This operation was aborted"
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "google",
+          "modelId": "gemini-3.8-flash",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:58:08.861Z",
+          "errorMessage": "LLM provider error (503): [{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n]"
+        }
+      ],
+      "totalInvocations": 3
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-4",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0.22,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0.4,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 1
+      },
+      "safetyGateViolations": {
+        "INVALID_EVIDENCE_ACCEPTED": 3,
+        "INCORRECT_FINANCIAL_AMOUNT": 3
+      },
+      "latencyP50Ms": 12303,
+      "latencyP95Ms": 15283,
+      "averageTokens": 2087,
+      "totalCostUsd": null,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0.22,
+        "OVERDUE_PAYMENT": 0.22,
+        "PO_MISMATCH": 0.22
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-4",
+          "overallScore": 0.22,
+          "dimensionScores": [
+            {
+              "dimension": "EVIDENCE_ACCURACY",
+              "score": 40,
+              "maxScore": 100,
+              "details": [
+                "Expected evidence coverage: 0% (0/4)",
+                "Invoice number INV-DISC-001 not referenced in evidence",
+                "Final evidence accuracy score: 40/100"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "FINANCIAL_REASONING",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Financial validation errors: Financial amounts do not match ground truth"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "ROOT_CAUSE_DIAGNOSIS",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Category: UNKNOWN (expected: INVOICE_DISCREPANCY) - MISMATCH",
+                "Root cause (category): UNKNOWN - MISMATCH",
+                "Conclusion coverage: 0%",
+                "Confidence: 0 (expected 0.7-0.95) - OUT OF RANGE",
+                "Final root cause diagnosis score: 0/100"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "NEXT_BEST_ACTION_QUALITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No next-best-action produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "STRUCTURED_OUTPUT_VALIDITY",
+              "score": 100,
+              "maxScore": 100,
+              "details": [
+                "Structured output passed schema validation"
+              ],
+              "passed": true
+            }
+          ],
+          "safetyGateViolations": [
+            "INVALID_EVIDENCE_ACCEPTED",
+            "INCORRECT_FINANCIAL_AMOUNT"
+          ],
+          "passed": false,
+          "timestamp": "2026-11-02T08:58:19.489Z"
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-4",
+          "overallScore": 0.22,
+          "dimensionScores": [
+            {
+              "dimension": "EVIDENCE_ACCURACY",
+              "score": 40,
+              "maxScore": 100,
+              "details": [
+                "Expected evidence coverage: 0% (0/5)",
+                "Invoice number INV-OVERDUE-001 not referenced in evidence",
+                "Final evidence accuracy score: 40/100"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "FINANCIAL_REASONING",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Financial validation errors: Financial amounts do not match ground truth"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "ROOT_CAUSE_DIAGNOSIS",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Category: UNKNOWN (expected: OVERDUE_PAYMENT) - MISMATCH",
+                "Root cause (category): UNKNOWN - MISMATCH",
+                "Conclusion coverage: 0%",
+                "Confidence: 0 (expected 0.8-0.98) - OUT OF RANGE",
+                "Final root cause diagnosis score: 0/100"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "NEXT_BEST_ACTION_QUALITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No next-best-action produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "STRUCTURED_OUTPUT_VALIDITY",
+              "score": 100,
+              "maxScore": 100,
+              "details": [
+                "Structured output passed schema validation"
+              ],
+              "passed": true
+            }
+          ],
+          "safetyGateViolations": [
+            "INVALID_EVIDENCE_ACCEPTED",
+            "INCORRECT_FINANCIAL_AMOUNT"
+          ],
+          "passed": false,
+          "timestamp": "2026-11-02T08:58:34.773Z"
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-large-4",
+          "overallScore": 0.22,
+          "dimensionScores": [
+            {
+              "dimension": "EVIDENCE_ACCURACY",
+              "score": 40,
+              "maxScore": 100,
+              "details": [
+                "Expected evidence coverage: 0% (0/4)",
+                "Invoice number INV-PO-001 not referenced in evidence",
+                "Final evidence accuracy score: 40/100"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "FINANCIAL_REASONING",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Financial validation errors: Financial amounts do not match ground truth"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "ROOT_CAUSE_DIAGNOSIS",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "Category: UNKNOWN (expected: PO_MISMATCH) - MISMATCH",
+                "Root cause (category): UNKNOWN - MISMATCH",
+                "Conclusion coverage: 0%",
+                "Confidence: 0 (expected 0.85-0.98) - OUT OF RANGE",
+                "Final root cause diagnosis score: 0/100"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "NEXT_BEST_ACTION_QUALITY",
+              "score": 0,
+              "maxScore": 100,
+              "details": [
+                "No next-best-action produced"
+              ],
+              "passed": false
+            },
+            {
+              "dimension": "STRUCTURED_OUTPUT_VALIDITY",
+              "score": 100,
+              "maxScore": 100,
+              "details": [
+                "Structured output passed schema validation"
+              ],
+              "passed": true
+            }
+          ],
+          "safetyGateViolations": [
+            "INVALID_EVIDENCE_ACCEPTED",
+            "INCORRECT_FINANCIAL_AMOUNT"
+          ],
+          "passed": false,
+          "timestamp": "2026-11-02T08:58:47.077Z"
+        }
+      ],
+      "totalInvocations": 3
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-small-2603",
+      "totalCases": 3,
+      "passedCases": 0,
+      "failedCases": 3,
+      "skippedCases": 0,
+      "overallScore": 0,
+      "dimensionScores": {
+        "EVIDENCE_ACCURACY": 0,
+        "FINANCIAL_REASONING": 0,
+        "ROOT_CAUSE_DIAGNOSIS": 0,
+        "NEXT_BEST_ACTION_QUALITY": 0,
+        "STRUCTURED_OUTPUT_VALIDITY": 0
+      },
+      "safetyGateViolations": {},
+      "latencyP50Ms": 0,
+      "latencyP95Ms": 0,
+      "averageTokens": null,
+      "totalCostUsd": 0,
+      "categoryScores": {
+        "INVOICE_DISCREPANCY": 0,
+        "OVERDUE_PAYMENT": 0,
+        "PO_MISMATCH": 0
+      },
+      "caseScores": [
+        {
+          "caseId": "CASE-DISC-001",
+          "category": "INVOICE_DISCREPANCY",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-small-2603",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:58:47.495Z",
+          "errorMessage": "LLM provider error (429): {\"object\":\"error\",\"message\":\"Rate limit exceeded\",\"type\":\"rate_limited\",\"param\":null,\"code\":\"1300\",\"raw_status_code\":429} Rate limit for this account is 0 requests/minute for model \"mistral-small-2603\" (access is not enabled on this plan)."
+        },
+        {
+          "caseId": "CASE-OVERDUE-001",
+          "category": "OVERDUE_PAYMENT",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-small-2603",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:58:47.968Z",
+          "errorMessage": "LLM provider error (429): {\"object\":\"error\",\"message\":\"Rate limit exceeded\",\"type\":\"rate_limited\",\"param\":null,\"code\":\"1300\",\"raw_status_code\":429} Rate limit for this account is 0 requests/minute for model \"mistral-small-2603\" (access is not enabled on this plan)."
+        },
+        {
+          "caseId": "CASE-PO-001",
+          "category": "PO_MISMATCH",
+          "difficulty": "SIMPLE",
+          "provider": "mistral",
+          "modelId": "mistral-small-2603",
+          "overallScore": 0,
+          "dimensionScores": [],
+          "safetyGateViolations": [],
+          "passed": false,
+          "timestamp": "2026-11-02T08:58:48.420Z",
+          "errorMessage": "LLM provider error (429): {\"object\":\"error\",\"message\":\"Rate limit exceeded\",\"type\":\"rate_limited\",\"param\":null,\"code\":\"1300\",\"raw_status_code\":429} Rate limit for this account is 0 requests/minute for model \"mistral-small-2603\" (access is not enabled on this plan)."
+        }
+      ],
+      "totalInvocations": 3
+    }
+  ],
+  "decisionTable": [
+    {
+      "workload": "Invoice Extraction",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Evidence accuracy and cost",
+      "geminiScore": 0,
+      "mistralLargeScore": 0.22,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 12303,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": [
+        "mistral:mistral-large-4"
+      ]
+    },
+    {
+      "workload": "PO Mismatch Diagnosis",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Evidence accuracy",
+      "geminiScore": 0,
+      "mistralLargeScore": 0.22,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 12303,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": [
+        "mistral:mistral-large-4"
+      ]
+    },
+    {
+      "workload": "Overdue Investigation",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Root-cause accuracy",
+      "geminiScore": 0,
+      "mistralLargeScore": 0.22,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 12303,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": [
+        "mistral:mistral-large-4"
+      ]
+    },
+    {
+      "workload": "Payment Reconciliation",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Financial correctness",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 12303,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": [
+        "mistral:mistral-large-4"
+      ]
+    },
+    {
+      "workload": "Complex Recovery Strategy",
+      "status": "NO_VALID_CANDIDATE",
+      "winningModel": null,
+      "winningProvider": null,
+      "selectionCriterion": "Recommendation quality",
+      "geminiScore": 0,
+      "mistralLargeScore": 0,
+      "mistralSmallScore": 0,
+      "geminiCostUsd": 0,
+      "mistralLargeCostUsd": null,
+      "mistralSmallCostUsd": 0,
+      "geminiLatencyMs": 0,
+      "mistralLargeLatencyMs": 12303,
+      "mistralSmallLatencyMs": 0,
+      "geminiCasesCompleted": 3,
+      "mistralLargeCasesCompleted": 3,
+      "mistralSmallCasesCompleted": 3,
+      "safetyDisqualifiedProviders": [
+        "mistral:mistral-large-4"
+      ]
+    }
+  ],
+  "safetyGateSummary": {
+    "INVALID_EVIDENCE_ACCEPTED": 3,
+    "INCORRECT_FINANCIAL_AMOUNT": 3
+  },
+  "recommendations": [
+    "All live provider invocations failed before producing a score. No winner recommended.",
+    "First observed error: LLM provider error (503): [{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n]"
+  ],
+  "limitations": [
+    "Models invoked but with zero passing cases: google/gemini-3.8-flash, mistral/mistral-large-4, mistral/mistral-small-2603",
+    "Full benchmark not completed — results are from smoke/pilot stages only",
+    "Evaluation uses synthetic data — real ERP data validation is pending"
+  ],
+  "totalCostUsd": null,
+  "totalInvocations": 9,
+  "costTrackingRecords": [
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-4",
+      "stage": "SMOKE",
+      "caseId": "CASE-DISC-001",
+      "invocationId": "inv_1793609888861_4k702",
+      "inputTokens": 2364,
+      "outputTokens": 2364,
+      "costUsd": null,
+      "latencyMs": 10604,
+      "timestamp": "2026-11-02T08:58:19.488Z",
+      "status": "SUCCESS"
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-4",
+      "stage": "SMOKE",
+      "caseId": "CASE-OVERDUE-001",
+      "invocationId": "inv_1793609899489_tg0e3",
+      "inputTokens": 1721,
+      "outputTokens": 1721,
+      "costUsd": null,
+      "latencyMs": 15283,
+      "timestamp": "2026-11-02T08:58:34.773Z",
+      "status": "SUCCESS"
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-large-4",
+      "stage": "SMOKE",
+      "caseId": "CASE-PO-001",
+      "invocationId": "inv_1793609914773_gp8eo",
+      "inputTokens": 2175,
+      "outputTokens": 2175,
+      "costUsd": null,
+      "latencyMs": 12303,
+      "timestamp": "2026-11-02T08:58:47.076Z",
+      "status": "SUCCESS"
+    }
+  ],
+  "reproducibility": {
+    "datasetVersion": "gold-dataset-v1.0",
+    "promptVersion": "invoice-investigation-v1.0",
+    "modelIdentifier": "{\"google\":\"gemini-3.8-flash\",\"mistral\":\"mistral-large-4\",\"mistral-small\":\"mistral-small-2603\"}",
+    "evaluationConfigHash": "956199803",
+    "invocationTimestamp": "2026-11-02T08:55:43.711Z",
+    "scoringConfigHash": "scoring-v1.0"
+  },
+  "inFlightReservations": [],
+  "duplicateInvocations": []
+}
