@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { getAuthSigningSecret } from "./dev-mode";
+import { getAuthSigningSecret, isSessionSecretStrong } from "./dev-mode";
 import { sessionRevocationStore } from "./session-store";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -24,7 +24,7 @@ interface SessionClaims {
 
 function decodeAndVerify(token: string | undefined): SessionClaims | null {
   const secret = getSessionSecret();
-  if (!secret || !token) return null;
+  if (!secret || !isSessionSecretStrong(secret) || !token) return null;
 
   const parts = token.split(".");
   if (parts.length !== 3 || parts[0] !== "v1") return null;
@@ -61,7 +61,7 @@ function decodeAndVerify(token: string | undefined): SessionClaims | null {
 
 export function createSessionToken(userId: string): string | null {
   const secret = getSessionSecret();
-  if (!secret) return null;
+  if (!secret || !isSessionSecretStrong(secret)) return null;
 
   const payload = encode({
     sub: userId,
@@ -86,5 +86,5 @@ export function revokeSessionToken(token: string | undefined): boolean {
 }
 
 export function isProductionSessionConfigurationValid(): boolean {
-  return Boolean(getSessionSecret());
+  return isSessionSecretStrong(getSessionSecret());
 }

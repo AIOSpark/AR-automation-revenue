@@ -76,6 +76,7 @@ export interface Invoice {
   created_by?: string | null;
   created_at: string;
   updated_at: string;
+  idempotency_key?: string | null;
 }
 
 export interface Payment {
@@ -95,6 +96,7 @@ export interface Payment {
   created_by?: string | null;
   created_at: string;
   updated_at: string;
+  idempotency_key?: string | null;
 }
 
 export interface PaymentInvoiceMatch {
@@ -106,6 +108,7 @@ export interface PaymentInvoiceMatch {
   confidence?: number | null;
   match_method?: 'deterministic' | 'fuzzy' | 'manual' | null;
   created_at: string;
+  idempotency_key?: string | null;
 }
 
 export type BankTransactionStatus = 'unmatched' | 'pending_approval' | 'matched' | 'ignored';
@@ -137,6 +140,7 @@ export interface CreditNote {
   source_system: string;
   source_id: string;
   customer_id: string;
+  invoice_id?: string | null;
   amount_minor_units: number;
   currency: string;
   date: string;
@@ -146,6 +150,29 @@ export interface CreditNote {
   created_by?: string | null;
   created_at: string;
   updated_at: string;
+  idempotency_key?: string | null;
+}
+
+export interface CreditNoteAllocation {
+  id: string;
+  organization_id: string;
+  credit_note_id: string;
+  invoice_id: string;
+  allocated_amount_minor_units: number;
+  status: 'allocated' | 'reversed';
+  reversal_reason?: string | null;
+  reason?: string | null;
+  allocated_by?: string | null;
+  reversed_by?: string | null;
+  reversed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  idempotency_key?: string | null;
+}
+
+export interface CreditNoteBalance {
+  availableMinorUnits: number;
+  allocatedMinorUnits: number;
 }
 
 export interface Dispute {

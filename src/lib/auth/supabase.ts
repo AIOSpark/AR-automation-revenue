@@ -139,28 +139,26 @@ export async function executeLogin(emailInput: string, passwordInput: string): P
   }
 
   if (!providerConfigured) {
-    if (passwordInput.toLowerCase().includes("wrong") || passwordInput === "WrongPassword999!") {
-      return { success: false, error: "Invalid email or password" };
-    }
-  } else {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password: passwordInput,
-      });
+    return { success: false, error: "Authentication provider is not configured" };
+  }
 
-      if (error) {
-        return { success: false, error: error.message };
-      }
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: passwordInput,
+    });
 
-      if (data.user?.email_confirmed_at) {
-        user.email_verified = true;
-        authStore.updateUserEmailVerified(user.auth_provider_id, true);
-      }
-    } catch (err) {
-      console.error("Supabase Auth API unavailable during login:", err);
-      return { success: false, error: "Authentication provider is temporarily unavailable" };
+    if (error) {
+      return { success: false, error: error.message };
     }
+
+    if (data.user?.email_confirmed_at) {
+      user.email_verified = true;
+      authStore.updateUserEmailVerified(user.auth_provider_id, true);
+    }
+  } catch (err) {
+    console.error("Supabase Auth API unavailable during login:", err);
+    return { success: false, error: "Authentication provider is temporarily unavailable" };
   }
 
   // Mandatory Email Verification Constraint Check

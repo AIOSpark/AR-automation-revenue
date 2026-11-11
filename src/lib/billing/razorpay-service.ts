@@ -164,6 +164,26 @@ export class RazorpayBillingService {
     return getWebhookSecret() !== null;
   }
 
+  /**
+   * Verify Razorpay Checkout Signature (HMAC SHA256)
+   * Verifies that a checkout callback was sent by Razorpay for a given payment/subscription pair.
+   */
+  public static verifyCheckoutSignature(paymentId: string, subscriptionId: string, keySecret: string, signature: string): boolean {
+    if (!keySecret || !signature) return false;
+    try {
+      const expectedSignature = crypto
+        .createHmac('sha256', keySecret)
+        .update(`${paymentId}|${subscriptionId}`)
+        .digest('hex');
+      const provided = Buffer.from(signature);
+      const expected = Buffer.from(expectedSignature);
+      if (provided.length !== expected.length) return false;
+      return crypto.timingSafeEqual(provided, expected);
+    } catch {
+      return false;
+    }
+  }
+
   public static verifyWebhookSignature(rawBody: string, signature: string, webhookSecret?: string): boolean {
     const secret = webhookSecret?.trim() || getWebhookSecret();
     if (!secret || !signature || !rawBody) return false;

@@ -168,7 +168,11 @@ export function queryReceivablesTable(
 
     const matches = udmStore.getMatches().filter((m) => m.invoice_id === inv.id);
     const paidMatchedSum = matches.reduce((acc, m) => acc + m.matched_amount_minor_units, 0);
-    const outstandingMinorUnits = Math.max(0, inv.amount_minor_units - paidMatchedSum);
+    const allocations = udmStore.getCreditAllocations().filter(
+      (a) => a.invoice_id === inv.id && a.status === 'allocated' && a.organization_id === inv.organization_id,
+    );
+    const creditAllocatedSum = allocations.reduce((acc, a) => acc + a.allocated_amount_minor_units, 0);
+    const outstandingMinorUnits = Math.max(0, inv.amount_minor_units - paidMatchedSum - creditAllocatedSum);
 
     const overdueCount = customerOverdueCount.get(inv.customer_id) || 0;
     const risk: 'high' | 'medium' | 'low' = overdueCount >= 2 ? 'high' : overdueCount === 1 ? 'medium' : 'low';

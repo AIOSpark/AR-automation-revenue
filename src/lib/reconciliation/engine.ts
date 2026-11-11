@@ -363,63 +363,72 @@ export class ReconciliationEngine {
       throw new Error('Selected invoices cannot absorb the full bank transaction amount');
     }
 
-    // 1. Create real UDM Payment record
-    const payment = udmStore.insertPayment({
-      organization_id: orgId,
-      source_system: tx.source_system,
-      source_id: tx.id,
-      customer_id: resolvedInvoices[0].customer_id,
-      amount_minor_units: tx.amount_minor_units,
-      currency: tx.currency,
-      date: tx.date,
-      reference: tx.narration_text || tx.raw_reference,
-    });
-
-    // 2. Create PaymentInvoiceMatch record(s) and update invoice status/balances
-    const createdMatchIds: string[] = [];
-    let remainingTxAmount = tx.amount_minor_units;
-
-    for (const invId of invoiceIds) {
-      const inv = resolvedInvoices.find((invoice) => invoice.id === invId);
-      if (!inv) throw new Error(`Target invoice not found for reconciliation match execution: ${invId}`);
-
-      const existingMatches = udmStore.getMatches().filter((m) => m.invoice_id === invId);
-      const paidSum = existingMatches.reduce((s, m) => s + m.matched_amount_minor_units, 0);
-      const openBal = Math.max(0, inv.amount_minor_units - paidSum);
-
-      const matchAmount = Math.min(remainingTxAmount, openBal > 0 ? openBal : remainingTxAmount);
-      if (matchAmount <= 0) continue;
-
-      const matchRecord: PaymentInvoiceMatch = udmStore.insertMatch({
+    // 1-3. Create payment, matches, update invoice statuses, mark bank transaction as matched
+    // All in a single atomic transaction: complete together or roll back together.
+    const result = await udmStore.transaction(() => {
+      // 1. Create real UDM Payment record
+      const payment = udmStore.insertPayment({
         organization_id: orgId,
-        payment_id: payment.id,
-        invoice_id: invId,
-        matched_amount_minor_units: matchAmount,
-        confidence: appReq.confidence,
-        match_method: payload.match_method || 'deterministic',
+        source_system: tx.source_system,
+        source_id: tx.id,
+        customer_id: resolvedInvoices[0].customer_id,
+        amount_minor_units: tx.amount_minor_units,
+        currency: tx.currency,
+        date: tx.date,
+        reference: tx.narration_text || tx.raw_reference,
       });
-      createdMatchIds.push(matchRecord.id);
-      remainingTxAmount -= matchAmount;
 
-      // Update invoice status based on total paid
-      const newPaidTotal = paidSum + matchAmount;
-      udmStore.updateInvoice(
-        invId,
-        { status: newPaidTotal >= inv.amount_minor_units ? 'paid' : 'partially_paid' },
-        reviewedUserId
-      );
-    }
+      // 2. Create PaymentInvoiceMatch record(s) and update invoice statuses/balances
+      const createdMatchIds: string[] = [];
+      let remainingTxAmount = tx.amount_minor_units;
 
-    if (remainingTxAmount !== 0) {
-      throw new Error('Reconciliation allocation did not fully consume the bank transaction amount');
-    }
+      for (const invId of invoiceIds) {
+        const inv = resolvedInvoices.find((invoice) => invoice.id === invId);
+        if (!inv) throw new Error(`Target invoice not found for reconciliation match execution: ${invId}`);
 
-    // 3. Mark bank_transactions row as matched
-    udmStore.updateBankTransaction(tx.id, {
-      status: 'matched',
-      matched_payment_id: payment.id,
-      matched_invoice_ids: invoiceIds,
+        const existingMatches = udmStore.getMatches().filter((m) => m.invoice_id === invId);
+        const paidSum = existingMatches.reduce((s, m) => s + m.matched_amount_minor_units, 0);
+        const openBal = Math.max(0, inv.amount_minor_units - paidSum);
+
+        const matchAmount = Math.min(remainingTxAmount, openBal > 0 ? openBal : remainingTxAmount);
+        if (matchAmount <= 0) continue;
+
+        const matchRecord: PaymentInvoiceMatch = udmStore.insertMatch({
+          organization_id: orgId,
+          payment_id: payment.id,
+          invoice_id: invId,
+          matched_amount_minor_units: matchAmount,
+          confidence: appReq.confidence,
+          match_method: payload.match_method || 'deterministic',
+        });
+        createdMatchIds.push(matchRecord.id);
+        remainingTxAmount -= matchAmount;
+
+        // Update invoice status based on total paid
+        const newPaidTotal = paidSum + matchAmount;
+        udmStore.updateInvoice(
+          invId,
+          { status: newPaidTotal >= inv.amount_minor_units ? 'paid' : 'partially_paid' },
+          reviewedUserId
+        );
+      }
+
+      if (remainingTxAmount !== 0) {
+        throw new Error('Reconciliation allocation did not fully consume the bank transaction amount');
+      }
+
+      // 3. Mark bank_transactions row as matched
+      udmStore.updateBankTransaction(tx.id, {
+        status: 'matched',
+        matched_payment_id: payment.id, // type mismatch handled below
+        matched_invoice_ids: invoiceIds,
+      });
+
+      return { payment, createdMatchIds };
     });
+
+    const payment = result.payment;
+    const createdMatchIds = result.createdMatchIds;
 
     // 4. Record outcome audit record for historical accuracy dataset
     const isModified = Boolean(overridePayload || appReq.modification);

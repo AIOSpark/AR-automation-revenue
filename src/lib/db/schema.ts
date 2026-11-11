@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, integer, bigint, pgEnum, uuid, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, integer, bigint, pgEnum, uuid, primaryKey, index, uniqueIndex, boolean } from 'drizzle-orm/pg-core';
 
 // ---------------------------------------------------------------------------
 // ENUM DEFINITIONS
@@ -157,4 +157,208 @@ export const auditLogs = pgTable('audit_logs', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('idx_audit_logs_org_created').on(table.organizationId, table.createdAt),
+]);
+
+// ---------------------------------------------------------------------------
+// BILLING & SUBSCRIPTION TABLES
+// ---------------------------------------------------------------------------
+
+export const subscriptions = pgTable('subscriptions', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  plan_id: text('plan_id').notNull(),
+  status: text('status').notNull(),
+  current_period_start: timestamp('current_period_start', { withTimezone: true }).notNull(),
+  current_period_end: timestamp('current_period_end', { withTimezone: true }).notNull(),
+  razorpay_subscription_id: text('razorpay_subscription_id'),
+  razorpay_customer_id: text('razorpay_customer_id'),
+  pending_plan_id: text('pending_plan_id'),
+  pending_razorpay_subscription_id: text('pending_razorpay_subscription_id'),
+  billing_interval: text('billing_interval'),
+  grace_period_end: timestamp('grace_period_end', { withTimezone: true }),
+  cancel_at_period_end: boolean('cancel_at_period_end').default(false),
+  cancelled_at: timestamp('cancelled_at', { withTimezone: true }),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_subscriptions_org').on(table.organization_id),
+]);
+
+export const usageEvents = pgTable('usage_events', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  event_type: text('event_type').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  metadata: text('metadata'),
+  occurred_at: timestamp('occurred_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_usage_events_org').on(table.organization_id),
+]);
+
+export const webhookEvents = pgTable('webhook_events', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  provider_event_id: text('provider_event_id').notNull().unique(),
+  event_type: text('event_type').notNull(),
+  razorpay_subscription_id: text('razorpay_subscription_id'),
+  razorpay_payment_id: text('razorpay_payment_id'),
+  processing_status: text('processing_status').notNull().default('RECEIVED'),
+  retry_count: integer('retry_count').notNull().default(0),
+  max_retries: integer('max_retries').notNull().default(3),
+  error_message: text('error_message'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_webhook_events_org').on(table.organization_id),
+  index('idx_webhook_events_status').on(table.processing_status),
+]);
+
+export const refundEvents = pgTable('refund_events', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  provider_refund_id: text('provider_refund_id').notNull().unique(),
+  payment_id: text('payment_id').notNull(),
+  amount_minor_units: bigint('amount_minor_units', { mode: 'number' }).notNull(),
+  currency: text('currency').notNull().default('INR'),
+  status: text('status').notNull().default('PENDING'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_refund_events_org').on(table.organization_id),
+]);
+
+// ---------------------------------------------------------------------------
+// UDM EXTENSION TABLES (credit notes, allocations, matches, disputes, exceptions, bank transactions)
+// ---------------------------------------------------------------------------
+
+export const paymentInvoiceMatches = pgTable('payment_invoice_matches', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  payment_id: text('payment_id').notNull().references(() => payments.id, { onDelete: 'cascade' }),
+  invoice_id: text('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
+  matched_amount_minor_units: bigint('matched_amount_minor_units', { mode: 'number' }).notNull(),
+  confidence: bigint('confidence', { mode: 'number' }),
+  match_method: text('match_method'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_payment_invoice_matches_org').on(table.organization_id),
+  index('idx_payment_invoice_matches_payment').on(table.payment_id),
+  index('idx_payment_invoice_matches_invoice').on(table.invoice_id),
+]);
+
+export const creditNotes = pgTable('credit_notes', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  source_system: text('source_system').notNull().default('MANUAL'),
+  source_id: text('source_id').notNull(),
+  customer_id: text('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
+  amount_minor_units: bigint('amount_minor_units', { mode: 'number' }).notNull(),
+  currency: text('currency').notNull().default('INR'),
+  date: timestamp('date', { withTimezone: true }).notNull(),
+  reason: text('reason'),
+  import_batch_id: text('import_batch_id'),
+  source_file_name: text('source_file_name'),
+  created_by: text('created_by'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_credit_notes_org').on(table.organization_id),
+  index('idx_credit_notes_customer').on(table.customer_id),
+]);
+
+export const creditAllocations = pgTable('credit_allocations', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  credit_note_id: text('credit_note_id').notNull().references(() => creditNotes.id, { onDelete: 'cascade' }),
+  invoice_id: text('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
+  allocated_amount_minor_units: bigint('allocated_amount_minor_units', { mode: 'number' }).notNull(),
+  status: text('status').notNull().default('allocated'),
+  reversal_reason: text('reversal_reason'),
+  reason: text('reason'),
+  allocated_by: text('allocated_by'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_credit_allocations_org').on(table.organization_id),
+  index('idx_credit_allocations_credit_note').on(table.credit_note_id),
+  index('idx_credit_allocations_invoice').on(table.invoice_id),
+]);
+
+export const disputes = pgTable('disputes', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  invoice_id: text('invoice_id').notNull().references(() => invoices.id, { onDelete: 'cascade' }),
+  reason: text('reason').notNull(),
+  amount_minor_units: bigint('amount_minor_units', { mode: 'number' }),
+  status: text('status').notNull().default('open'),
+  resolution: text('resolution'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_disputes_org').on(table.organization_id),
+  index('idx_disputes_invoice').on(table.invoice_id),
+]);
+
+export const disputeEvidences = pgTable('dispute_evidences', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  dispute_id: text('dispute_id').notNull().references(() => disputes.id, { onDelete: 'cascade' }),
+  file_name: text('file_name').notNull(),
+  file_url: text('file_url').notNull(),
+  file_type: text('file_type'),
+  uploaded_by_user_id: text('uploaded_by_user_id'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_dispute_evidences_org').on(table.organization_id),
+  index('idx_dispute_evidences_dispute').on(table.dispute_id),
+]);
+
+export const exceptions = pgTable('exceptions', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  customer_id: text('customer_id').references(() => customers.id, { onDelete: 'cascade' }),
+  invoice_id: text('invoice_id').references(() => invoices.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  severity: text('severity').notNull(),
+  owner_user_id: text('owner_user_id'),
+  evidence: text('evidence'),
+  reason: text('reason'),
+  recommended_action: text('recommended_action'),
+  resolution: text('resolution'),
+  status: text('status').notNull().default('detected'),
+  import_batch_id: text('import_batch_id'),
+  source_file_name: text('source_file_name'),
+  source_sheet_name: text('source_sheet_name'),
+  source_row_number: integer('source_row_number'),
+  created_by: text('created_by'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_exceptions_org').on(table.organization_id),
+  index('idx_exceptions_customer').on(table.customer_id),
+  index('idx_exceptions_invoice').on(table.invoice_id),
+]);
+
+export const bankTransactions = pgTable('bank_transactions', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  source_system: text('source_system').notNull(),
+  raw_reference: text('raw_reference').notNull(),
+  amount_minor_units: bigint('amount_minor_units', { mode: 'number' }).notNull(),
+  currency: text('currency').notNull().default('INR'),
+  date: timestamp('date', { withTimezone: true }).notNull(),
+  narration_text: text('narration_text').notNull(),
+  status: text('status').notNull().default('unmatched'),
+  matched_payment_id: text('matched_payment_id').references(() => payments.id, { onDelete: 'set null' }),
+  matched_invoice_ids: text('matched_invoice_ids').array(),
+  confidence: bigint('confidence', { mode: 'number' }),
+  match_method: text('match_method'),
+  rejection_reason: text('rejection_reason'),
+  import_batch_id: text('import_batch_id'),
+  source_file_name: text('source_file_name'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_bank_transactions_org').on(table.organization_id),
+  index('idx_bank_transactions_status').on(table.status),
 ]);

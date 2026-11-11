@@ -5,6 +5,7 @@ import { computeTotalReceivables, computeAtRiskReceivables } from '@/lib/dashboa
 import { resolveTenantContext, validatePermission } from '@/lib/tenant/middleware';
 import { parsePagination } from '@/lib/api/pagination';
 import { validatePilotReadOnly } from '@/lib/auth/pilot';
+import { extractIdempotencyKey, computeRequestFingerprint, checkAndReserveIdempotency, finalizeIdempotency, releaseIdempotency } from '@/lib/idempotency';
 
 export async function GET(request: Request) {
   try {
@@ -149,29 +150,60 @@ export async function POST(request: Request) {
     if (permissionError) return permissionError;
     const orgId = context!.organization.id;
 
-    // Read-only pilot mode: customer record creation is a prohibited mutation.
-    const pilotError = validatePilotReadOnly(orgId, 'CUSTOMER_RECORD_MUTATION');
-    if (pilotError) return pilotError;
+    // Idempotency: require Idempotency-Key header for financial creation
+    const idempotencyKey = extractIdempotencyKey(request);
+    if (!idempotencyKey) {
+      return NextResponse.json(
+        { error: 'Idempotency-Key header is required for customer creation' },
+        { status: 400 }
+      );
+    }
 
     const body = await request.json();
+    const fingerprint = computeRequestFingerprint(body);
+
+    // Atomically check and reserve the idempotency key under lock
+    const idempotencyCheck = await checkAndReserveIdempotency(orgId, 'customers', idempotencyKey, fingerprint);
+    if (idempotencyCheck.status === 'replay') {
+      return NextResponse.json(idempotencyCheck.response, { status: 200 });
+    }
+    if (idempotencyCheck.status === 'conflict') {
+      return NextResponse.json(
+        { error: 'Idempotency-Key already used with a different request body' },
+        { status: 409 }
+      );
+    }
+
+    // Read-only pilot mode: customer record creation is a prohibited mutation.
+    const pilotError = validatePilotReadOnly(orgId, 'CUSTOMER_RECORD_MUTATION');
+    if (pilotError) {
+      releaseIdempotency(orgId, 'customers', idempotencyKey);
+      return pilotError;
+    }
+
     const { name, source_id, credit_limit_minor_units, payment_terms_days, industry, currency } = body;
 
     if (typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 200) {
+      releaseIdempotency(orgId, 'customers', idempotencyKey);
       return NextResponse.json({ error: 'Customer name is required' }, { status: 400 });
     }
 
     const creditLimit = credit_limit_minor_units === undefined ? 10000000 : credit_limit_minor_units;
     const paymentTerms = payment_terms_days === undefined ? 30 : payment_terms_days;
     if (!Number.isSafeInteger(creditLimit) || creditLimit < 0) {
+      releaseIdempotency(orgId, 'customers', idempotencyKey);
       return NextResponse.json({ error: 'credit_limit_minor_units must be a non-negative integer' }, { status: 400 });
     }
     if (!Number.isSafeInteger(paymentTerms) || paymentTerms < 0 || paymentTerms > 3650) {
+      releaseIdempotency(orgId, 'customers', idempotencyKey);
       return NextResponse.json({ error: 'payment_terms_days must be an integer between 0 and 3650' }, { status: 400 });
     }
     if (currency !== undefined && (typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency))) {
+      releaseIdempotency(orgId, 'customers', idempotencyKey);
       return NextResponse.json({ error: 'currency must be a three-letter uppercase code' }, { status: 400 });
     }
     if (source_id !== undefined && (typeof source_id !== 'string' || source_id.trim().length > 200)) {
+      releaseIdempotency(orgId, 'customers', idempotencyKey);
       return NextResponse.json({ error: 'source_id must be a string of 200 characters or fewer' }, { status: 400 });
     }
 
@@ -188,11 +220,18 @@ export async function POST(request: Request) {
       created_by: 'user',
     });
 
+    // Finalize idempotency key after successful creation
+    finalizeIdempotency(orgId, 'customers', idempotencyKey, newCustomer.id, fingerprint, {
+      success: true,
+      customer: newCustomer,
+    });
+
     return NextResponse.json({
       success: true,
       customer: newCustomer,
     });
   } catch (err: any) {
+    // Key is automatically released by the transaction lock on error
     return NextResponse.json(
       { error: err.message || 'Failed to create customer record' },
       { status: 500 }

@@ -44,6 +44,7 @@ export interface ImportPipelineConfig {
   sourceSystem: string;
   dateFormatConvention?: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
   columnMapping?: Record<string, string>; // Maps target field -> source column name
+  currency?: string;
 }
 
 class ImportPipelineEngine {

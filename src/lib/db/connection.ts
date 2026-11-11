@@ -57,11 +57,6 @@ export function getDb(): ReturnType<typeof drizzle> | null {
   return dbInstance;
 }
 
-// Export the schema for drizzle-kit to generate migrations
-export type { 
-  schema as dbSchema 
-} from './schema';
-
 // Export all table definitions for type reference
 export type {
   organizations,

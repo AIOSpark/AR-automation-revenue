@@ -23,6 +23,7 @@ export interface OrganizationRecord {
   created_at: string;
   updated_at: string;
   pilotMode?: boolean;
+  currency?: string;
 }
 
 // Memory & Storage Store for User Identity and Organization Draft Data
@@ -31,6 +32,7 @@ class AuthStore {
   private authProviderToUserId: Map<string, string> = new Map(); // Keyed by auth_provider_id
   private emailToUserId: Map<string, string> = new Map(); // Keyed by lowercase email
   private organizations: Map<string, OrganizationRecord> = new Map();
+  private platformAdmins: Set<string> = new Set(); // Keyed by user ID
 
   constructor() {
     const state = readSnapshot<{ users: UserRecord[]; organizations: OrganizationRecord[] }>('auth');
@@ -149,6 +151,18 @@ class AuthStore {
       }
     }
     return null;
+  }
+
+  public isPlatformAdmin(userId: string): boolean {
+    return this.platformAdmins.has(userId);
+  }
+
+  public setPlatformAdmin(userId: string, isAdmin: boolean): void {
+    if (isAdmin) {
+      this.platformAdmins.add(userId);
+    } else {
+      this.platformAdmins.delete(userId);
+    }
   }
 
   public clearAll(): void {

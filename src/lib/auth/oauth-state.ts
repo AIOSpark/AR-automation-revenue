@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getAuthSigningSecret } from './dev-mode';
+import { getAuthSigningSecret, isSessionSecretStrong } from './dev-mode';
 
 type OAuthState = {
   organizationId: string;
@@ -12,7 +12,8 @@ type OAuthState = {
 const consumedNonces = new Map<string, number>();
 
 function secret(): string | null {
-  return getAuthSigningSecret();
+  const key = getAuthSigningSecret();
+  return key && isSessionSecretStrong(key) ? key : null;
 }
 
 function sign(value: string, key: string): string {

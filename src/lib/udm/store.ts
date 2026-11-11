@@ -12,6 +12,8 @@ import {
   Payment,
   PaymentInvoiceMatch,
   CreditNote,
+  CreditNoteAllocation,
+  CreditNoteBalance,
   Dispute,
   DisputeEvidence,
   ExceptionRecord,
@@ -25,10 +27,20 @@ type UDMState = {
   payments: Payment[];
   matches: PaymentInvoiceMatch[];
   creditNotes: CreditNote[];
+  creditAllocations: CreditNoteAllocation[];
   disputes: Dispute[];
   disputeEvidences: DisputeEvidence[];
   exceptions: ExceptionRecord[];
   bankTransactions: BankTransaction[];
+  idempotencyKeys: Array<{ organization_id: string; key: string; record_id: string }>;
+  apiIdempotencyKeys: Array<{
+    organization_id: string;
+    endpoint: string;
+    key: string;
+    record_id: string | null;
+    fingerprint: string;
+    response: unknown;
+  }>;
 };
 
 class UniversalDataStore {
@@ -38,10 +50,16 @@ class UniversalDataStore {
   private payments: Map<string, Payment> = new Map();
   private matches: Map<string, PaymentInvoiceMatch> = new Map();
   private creditNotes: Map<string, CreditNote> = new Map();
+  private creditAllocations: Map<string, CreditNoteAllocation> = new Map();
   private disputes: Map<string, Dispute> = new Map();
   private disputeEvidences: Map<string, DisputeEvidence> = new Map();
   private exceptions: Map<string, ExceptionRecord> = new Map();
   private bankTransactions: Map<string, BankTransaction> = new Map();
+  private idempotencyKeys: Map<string, string> = new Map(); // Keyed by orgId + ":" + key
+  private idempotencyLocks: Map<string, Promise<unknown>> = new Map(); // In-flight key operations
+  private _transacting: boolean = false;
+  private _transactionLock: Promise<unknown> = Promise.resolve(); // Serializes concurrent transactions
+  private apiIdempotencyKeys: Map<string, { recordId: string | null; fingerprint: string; response: unknown }> = new Map(); // Keyed by orgId:endpoint:key
 
   /** Callback invoked on any data mutation for cache invalidation (e.g. dashboard metrics). */
   private onDataChange: ((orgId: string) => void) | null = null;
@@ -53,9 +71,8 @@ class UniversalDataStore {
 
   /** Notify registered handlers of a data change for an org. */
   private notifyDataChange(orgId: string): void {
-    if (this.onDataChange) {
-      this.onDataChange(orgId);
-    }
+    if (this._transacting || !this.onDataChange) return;
+    this.onDataChange(orgId);
   }
 
   constructor() {
@@ -67,13 +84,168 @@ class UniversalDataStore {
     this.payments = new Map(state.payments.map((item) => [item.id, item]));
     this.matches = new Map(state.matches.map((item) => [item.id, item]));
     this.creditNotes = new Map(state.creditNotes.map((item) => [item.id, item]));
+    this.creditAllocations = new Map((state.creditAllocations || []).map((item) => [item.id, item]));
     this.disputes = new Map(state.disputes.map((item) => [item.id, item]));
     this.disputeEvidences = new Map(state.disputeEvidences.map((item) => [item.id, item]));
     this.exceptions = new Map(state.exceptions.map((item) => [item.id, item]));
     this.bankTransactions = new Map(state.bankTransactions.map((item) => [item.id, item]));
+    for (const entry of state.apiIdempotencyKeys || []) {
+      this.apiIdempotencyKeys.set(`${entry.organization_id}:${entry.endpoint}:${entry.key}`, {
+        recordId: entry.record_id,
+        fingerprint: entry.fingerprint,
+        response: entry.response,
+      });
+    }
+  }
+
+  /**
+   * Serializes access to an idempotency key so that concurrent requests with
+   * the same key cannot both pass the existence check and create duplicates.
+   * Within a single Node.js process the event loop already serializes
+   * synchronous work; this lock adds protection against future async work
+   * interleaving between the idempotency check and the record write.
+   */
+  private async withIdempotencyLock<T>(orgId: string, key: string, operation: () => T): Promise<T> {
+    const lockKey = `${orgId}:${key}`;
+
+    // Wait for any in-flight operation on this key to complete
+    const inFlight = this.idempotencyLocks.get(lockKey);
+    if (inFlight) {
+      await inFlight;
+    }
+
+    // After waiting, check whether the key was already resolved by the
+    // in-flight operation
+    const existingRecordId = this.idempotencyKeys.get(lockKey);
+    if (existingRecordId) {
+      return existingRecordId as unknown as T;
+    }
+
+    const promise = Promise.resolve().then(operation);
+    this.idempotencyLocks.set(lockKey, promise);
+    try {
+      return await promise;
+    } finally {
+      this.idempotencyLocks.delete(lockKey);
+    }
+  }
+
+  /**
+   * Atomically check and reserve an API-level idempotency key under the key lock.
+   *
+   * Returns:
+   *   { status: 'available', recordId: null } — key not seen before, reserved for this request
+   *   { status: 'replay', recordId, response } — same key + same fingerprint, return cached response
+   *   { status: 'conflict', recordId } — same key + different fingerprint (HTTP 409)
+   */
+  public async checkAndReserveApiIdempotency(
+    orgId: string,
+    endpoint: string,
+    key: string,
+    fingerprint: string
+  ): Promise<{ status: 'available' | 'replay' | 'conflict'; recordId: string | null; response: unknown | null }> {
+    return this.withIdempotencyLock<{ status: 'available' | 'replay' | 'conflict'; recordId: string | null; response: unknown | null }>(orgId, key, () => {
+      const lockKey = `${orgId}:${endpoint}:${key}`;
+      const existing = this.apiIdempotencyKeys.get(lockKey);
+      if (!existing) {
+        // Reserve the key as pending (no response yet) to prevent concurrent duplicates
+        this.apiIdempotencyKeys.set(lockKey, { recordId: null, fingerprint, response: null });
+        return { status: 'available' as const, recordId: null, response: null };
+      }
+      if (existing.fingerprint !== fingerprint) {
+        return { status: 'conflict' as const, recordId: existing.recordId, response: null };
+      }
+      return { status: 'replay' as const, recordId: existing.recordId, response: existing.response };
+    });
+  }
+
+  /**
+   * Finalize an idempotency key after a successful mutation, storing the record ID
+   * and response for replay on duplicate requests.
+   */
+  public finalizeApiIdempotency(
+    orgId: string,
+    endpoint: string,
+    key: string,
+    recordId: string,
+    fingerprint: string,
+    response: unknown
+  ): void {
+    const lockKey = `${orgId}:${endpoint}:${key}`;
+    this.apiIdempotencyKeys.set(lockKey, { recordId, fingerprint, response });
+  }
+
+  /**
+   * Release an idempotency key after a failed mutation, allowing retries.
+   */
+  public releaseApiIdempotency(orgId: string, endpoint: string, key: string): void {
+    const lockKey = `${orgId}:${endpoint}:${key}`;
+    this.apiIdempotencyKeys.delete(lockKey);
+  }
+
+  public async transaction<T>(callback: () => T): Promise<T> {
+    // Serialize concurrent transactions so only one snapshot/restore
+    // cycle runs at a time. A failed transaction does not poison the lock
+    // for subsequent transactions.
+    const previous = this._transactionLock;
+    const release = (async () => {
+      try {
+        await previous;
+      } catch {
+        // Previous transaction failed — release the lock so the next
+        // transaction can proceed.
+      }
+    })();
+    const next: Promise<T> = (async () => {
+      await release;
+      return this._runTransaction(callback);
+    })();
+    this._transactionLock = next;
+    return next;
+  }
+
+  private async _runTransaction<T>(callback: () => T): Promise<T> {
+    const snapshots = {
+      customers: new Map(this.customers),
+      contacts: new Map(this.contacts),
+      invoices: new Map(this.invoices),
+      payments: new Map(this.payments),
+      matches: new Map(this.matches),
+      creditNotes: new Map(this.creditNotes),
+      creditAllocations: new Map(this.creditAllocations),
+      disputes: new Map(this.disputes),
+      disputeEvidences: new Map(this.disputeEvidences),
+      exceptions: new Map(this.exceptions),
+      bankTransactions: new Map(this.bankTransactions),
+      idempotencyKeys: new Map(this.idempotencyKeys),
+    };
+
+    this._transacting = true;
+    try {
+      const result = callback();
+      this.persist();
+      this._transacting = false;
+      return result;
+    } catch (error) {
+      this.customers = snapshots.customers;
+      this.contacts = snapshots.contacts;
+      this.invoices = snapshots.invoices;
+      this.payments = snapshots.payments;
+      this.matches = snapshots.matches;
+      this.creditNotes = snapshots.creditNotes;
+      this.creditAllocations = snapshots.creditAllocations;
+      this.disputes = snapshots.disputes;
+      this.disputeEvidences = snapshots.disputeEvidences;
+      this.exceptions = snapshots.exceptions;
+      this.bankTransactions = snapshots.bankTransactions;
+      this.idempotencyKeys = snapshots.idempotencyKeys;
+      this._transacting = false;
+      throw error;
+    }
   }
 
   private persist(): void {
+    if (this._transacting) return;
     writeSnapshot<UDMState>('udm', {
       customers: Array.from(this.customers.values()),
       contacts: Array.from(this.contacts.values()),
@@ -81,10 +253,26 @@ class UniversalDataStore {
       payments: Array.from(this.payments.values()),
       matches: Array.from(this.matches.values()),
       creditNotes: Array.from(this.creditNotes.values()),
+      creditAllocations: Array.from(this.creditAllocations.values()),
       disputes: Array.from(this.disputes.values()),
       disputeEvidences: Array.from(this.disputeEvidences.values()),
       exceptions: Array.from(this.exceptions.values()),
       bankTransactions: Array.from(this.bankTransactions.values()),
+      idempotencyKeys: Array.from(this.idempotencyKeys.entries()).map(([key, recordId]) => {
+        const [organizationId, idempotencyKey] = key.split(':', 2);
+        return { organization_id: organizationId, key: idempotencyKey, record_id: recordId };
+      }),
+      apiIdempotencyKeys: Array.from(this.apiIdempotencyKeys.entries()).map(([key, value]) => {
+        const [organizationId, endpoint, idempotencyKey] = key.split(':', 3);
+        return {
+          organization_id: organizationId,
+          endpoint,
+          key: idempotencyKey,
+          record_id: value.recordId,
+          fingerprint: value.fingerprint,
+          response: value.response,
+        };
+      }),
     });
   }
 
@@ -170,10 +358,28 @@ class UniversalDataStore {
     if (!Number.isInteger(data.amount_minor_units)) {
       throw new Error(`Invoice amount_minor_units must be an integer: ${data.amount_minor_units}`);
     }
+
+    // Idempotency: return existing record if this key was already used for this org
+    if (data.idempotency_key) {
+      const idempotencyKey = `${data.organization_id}:${data.idempotency_key}`;
+      const existingRecordId = this.idempotencyKeys.get(idempotencyKey);
+      if (existingRecordId) {
+        const existing = this.invoices.get(existingRecordId);
+        if (existing) {
+          return existing;
+        }
+      }
+    }
+
     const id = `inv_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
     const now = new Date().toISOString();
     const record: Invoice = { ...data, id, created_at: now, updated_at: now };
     this.invoices.set(id, record);
+
+    if (data.idempotency_key) {
+      this.idempotencyKeys.set(`${data.organization_id}:${data.idempotency_key}`, id);
+    }
+
     this.persist();
     this.notifyDataChange(data.organization_id);
 
@@ -271,10 +477,28 @@ class UniversalDataStore {
     if (!Number.isInteger(data.amount_minor_units)) {
       throw new Error(`Payment amount_minor_units must be an integer: ${data.amount_minor_units}`);
     }
+
+    // Idempotency: return existing record if this key was already used for this org
+    if (data.idempotency_key) {
+      const idempotencyKey = `${data.organization_id}:${data.idempotency_key}`;
+      const existingRecordId = this.idempotencyKeys.get(idempotencyKey);
+      if (existingRecordId) {
+        const existing = this.payments.get(existingRecordId);
+        if (existing) {
+          return existing;
+        }
+      }
+    }
+
     const id = `pay_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
     const now = new Date().toISOString();
     const record: Payment = { ...data, id, created_at: now, updated_at: now };
     this.payments.set(id, record);
+
+    if (data.idempotency_key) {
+      this.idempotencyKeys.set(`${data.organization_id}:${data.idempotency_key}`, id);
+    }
+
     this.persist();
     this.notifyDataChange(data.organization_id);
     return record;
@@ -295,6 +519,19 @@ class UniversalDataStore {
     if (!payment || !invoice || payment.organization_id !== data.organization_id || invoice.organization_id !== data.organization_id) {
       throw new Error('Payment match entities must belong to the active organization context');
     }
+
+    // Idempotency: return existing record if this key was already used for this org
+    if (data.idempotency_key) {
+      const idempotencyKey = `${data.organization_id}:${data.idempotency_key}`;
+      const existingRecordId = this.idempotencyKeys.get(idempotencyKey);
+      if (existingRecordId) {
+        const existing = this.matches.get(existingRecordId);
+        if (existing) {
+          return existing;
+        }
+      }
+    }
+
     // Duplicate prevention: same payment cannot be matched to the same invoice twice
     const existingMatch = Array.from(this.matches.values()).find(
       (m) => m.payment_id === data.payment_id && m.invoice_id === data.invoice_id
@@ -306,6 +543,11 @@ class UniversalDataStore {
     const now = new Date().toISOString();
     const record: PaymentInvoiceMatch = { ...data, id, created_at: now };
     this.matches.set(id, record);
+
+    if (data.idempotency_key) {
+      this.idempotencyKeys.set(`${data.organization_id}:${data.idempotency_key}`, id);
+    }
+
     this.persist();
     this.notifyDataChange(data.organization_id);
     return record;
@@ -321,10 +563,28 @@ class UniversalDataStore {
 
   public insertCreditNote(data: Omit<CreditNote, 'id' | 'created_at' | 'updated_at'>): CreditNote {
     this.assertWriteTenant(data.organization_id);
+
+    // Idempotency: return existing record if this key was already used for this org
+    if (data.idempotency_key) {
+      const idempotencyKey = `${data.organization_id}:${data.idempotency_key}`;
+      const existingRecordId = this.idempotencyKeys.get(idempotencyKey);
+      if (existingRecordId) {
+        const existing = this.creditNotes.get(existingRecordId);
+        if (existing) {
+          return existing;
+        }
+      }
+    }
+
     const id = `cn_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
     const now = new Date().toISOString();
     const record: CreditNote = { ...data, id, created_at: now, updated_at: now };
     this.creditNotes.set(id, record);
+
+    if (data.idempotency_key) {
+      this.idempotencyKeys.set(`${data.organization_id}:${data.idempotency_key}`, id);
+    }
+
     this.persist();
     this.notifyDataChange(data.organization_id);
     return record;
@@ -334,6 +594,164 @@ class UniversalDataStore {
     const orgId = getRequestTenant();
     if (!orgId) return [];
     return Array.from(this.creditNotes.values()).filter((cn) => cn.organization_id === orgId);
+  }
+
+  public getCreditNoteBalance(creditNoteId: string): CreditNoteBalance {
+    const cn = this.creditNotes.get(creditNoteId);
+    if (!cn) {
+      return { availableMinorUnits: 0, allocatedMinorUnits: 0 };
+    }
+    const allocations = Array.from(this.creditAllocations.values()).filter(
+      (a) => a.credit_note_id === creditNoteId && a.status === 'allocated',
+    );
+    const allocatedMinorUnits = allocations.reduce((sum, a) => sum + a.allocated_amount_minor_units, 0);
+    return {
+      availableMinorUnits: Math.max(0, cn.amount_minor_units - allocatedMinorUnits),
+      allocatedMinorUnits,
+    };
+  }
+
+  public getCreditAllocations(): CreditNoteAllocation[] {
+    const orgId = getRequestTenant();
+    if (!orgId) return [];
+    return Array.from(this.creditAllocations.values()).filter((a) => a.organization_id === orgId);
+  }
+
+  public insertCreditAllocation(data: Omit<CreditNoteAllocation, 'id' | 'created_at' | 'updated_at' | 'status'>): CreditNoteAllocation {
+    this.assertWriteTenant(data.organization_id);
+
+    // Idempotency: return existing record if this key was already used for this org
+    if (data.idempotency_key) {
+      const idempotencyKey = `${data.organization_id}:${data.idempotency_key}`;
+      const existingRecordId = this.idempotencyKeys.get(idempotencyKey);
+      if (existingRecordId) {
+        const existing = this.creditAllocations.get(existingRecordId);
+        if (existing) {
+          return existing;
+        }
+      }
+    }
+
+    const creditNote = this.creditNotes.get(data.credit_note_id);
+    if (!creditNote || creditNote.organization_id !== data.organization_id) {
+      throw new Error('Credit note not found or does not belong to the active organization');
+    }
+    const invoice = this.invoices.get(data.invoice_id);
+    if (!invoice || invoice.organization_id !== data.organization_id) {
+      throw new Error('Invoice not found or does not belong to the active organization');
+    }
+
+    const balance = this.getCreditNoteBalance(data.credit_note_id);
+    if (data.allocated_amount_minor_units > balance.availableMinorUnits) {
+      throw new Error(`Allocation exceeds available credit note balance`);
+    }
+
+    const existingAllocations = Array.from(this.creditAllocations.values()).filter(
+      (a) => a.invoice_id === data.invoice_id && a.status === 'allocated' && a.organization_id === data.organization_id,
+    );
+    const invoiceCreditAllocatedSum = existingAllocations.reduce((sum, a) => sum + a.allocated_amount_minor_units, 0);
+
+    const invoiceMatches = udmStore.getMatches().filter(
+      (m) => m.invoice_id === data.invoice_id && m.organization_id === data.organization_id,
+    );
+    const invoicePaidSum = invoiceMatches.reduce((sum, m) => sum + m.matched_amount_minor_units, 0);
+
+    const invoiceOutstanding = invoice.amount_minor_units - invoicePaidSum - invoiceCreditAllocatedSum;
+    if (invoiceOutstanding <= 0) {
+      throw new Error(`Invoice ${data.invoice_id} is already fully settled`);
+    }
+    if (data.allocated_amount_minor_units > invoiceOutstanding) {
+      throw new Error(`Allocation exceeds invoice outstanding balance`);
+    }
+
+    const id = `ca_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+    const now = new Date().toISOString();
+    const record: CreditNoteAllocation = { ...data, id, status: 'allocated', created_at: now, updated_at: now };
+    this.creditAllocations.set(id, record);
+
+    if (data.idempotency_key) {
+      this.idempotencyKeys.set(`${data.organization_id}:${data.idempotency_key}`, id);
+    }
+
+    this.persist();
+    this.notifyDataChange(data.organization_id);
+
+    AuditService.record({
+      organization_id: data.organization_id,
+      actor_user_id: data.allocated_by || null,
+      actor_type: data.allocated_by ? 'user' : 'system',
+      action_type: 'credit_note.allocation_created',
+      subject_type: 'credit_note_allocation',
+      subject_id: id,
+      after_state: {
+        credit_note_id: data.credit_note_id,
+        invoice_id: data.invoice_id,
+        allocated_amount_minor_units: data.allocated_amount_minor_units,
+      },
+      result: 'success',
+    });
+
+    return record;
+  }
+
+  public reverseCreditAllocation(allocationId: string, reason: string, reversedBy?: string): CreditNoteAllocation {
+    const existing = this.creditAllocations.get(allocationId);
+    if (!existing) {
+      throw new Error(`Credit allocation not found: ${allocationId}`);
+    }
+    const tenantId = getRequestTenant();
+    if (!tenantId || existing.organization_id !== tenantId) {
+      throw new Error('Credit allocation reversal denied outside the active organization context');
+    }
+    if (existing.status !== 'allocated') {
+      throw new Error(`Credit allocation ${allocationId} is already ${existing.status}`);
+    }
+
+    const now = new Date().toISOString();
+    const reversed: CreditNoteAllocation = {
+      ...existing,
+      status: 'reversed',
+      reversal_reason: reason,
+      reversed_by: reversedBy || null,
+      reversed_at: now,
+      updated_at: now,
+    };
+    this.creditAllocations.set(allocationId, reversed);
+    this.persist();
+    this.notifyDataChange(existing.organization_id);
+
+    AuditService.record({
+      organization_id: existing.organization_id,
+      actor_user_id: reversedBy || null,
+      actor_type: reversedBy ? 'user' : 'system',
+      action_type: 'credit_note.allocation_reversed',
+      subject_type: 'credit_note_allocation',
+      subject_id: allocationId,
+      after_state: {
+        credit_note_id: existing.credit_note_id,
+        invoice_id: existing.invoice_id,
+        reversed_amount_minor_units: existing.allocated_amount_minor_units,
+        reversal_reason: reason,
+      },
+      result: 'success',
+    });
+
+    return reversed;
+  }
+
+  public computeInvoiceOutstanding(invoice: Invoice): number {
+    const orgId = getRequestTenant();
+    if (!orgId) {
+      throw new Error('Missing tenant context: orgId not available in current request context');
+    }
+    const matches = udmStore.getMatches().filter((m) => m.invoice_id === invoice.id && m.organization_id === orgId);
+    const paidMatchedSum = matches.reduce((acc, m) => acc + m.matched_amount_minor_units, 0);
+    const allocations = Array.from(this.creditAllocations.values()).filter(
+      (a) => a.invoice_id === invoice.id && a.status === 'allocated' && a.organization_id === orgId,
+    );
+    const creditAllocatedSum = allocations.reduce((acc, a) => acc + a.allocated_amount_minor_units, 0);
+    const outstanding = invoice.amount_minor_units - paidMatchedSum - creditAllocatedSum;
+    return Math.max(0, outstanding);
   }
 
   // --- DISPUTES ---
@@ -469,10 +887,12 @@ class UniversalDataStore {
     this.payments.clear();
     this.matches.clear();
     this.creditNotes.clear();
+    this.creditAllocations.clear();
     this.disputes.clear();
     this.disputeEvidences.clear();
     this.exceptions.clear();
     this.bankTransactions.clear();
+    this.idempotencyKeys.clear();
     deleteSnapshot('udm');
   }
 }

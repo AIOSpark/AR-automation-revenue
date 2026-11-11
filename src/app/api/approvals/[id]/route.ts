@@ -155,19 +155,21 @@ export async function POST(
     if (appReq.subject_type === 'exception' || appReq.proposed_action?.exception_id) {
       const excId = appReq.subject_id || appReq.proposed_action?.exception_id;
       if (excId) {
-        if (action === 'reject') {
-          exceptionEngine.transitionException(excId, 'rejected', appReq.organization_id);
-        } else {
-          exceptionEngine.transitionException(excId, 'approved', appReq.organization_id);
-          const exc = exceptionEngine.transitionException(excId, 'executed', appReq.organization_id);
+        await udmStore.transaction(() => {
+          if (action === 'reject') {
+            exceptionEngine.transitionException(excId, 'rejected', appReq.organization_id);
+          } else {
+            exceptionEngine.transitionException(excId, 'approved', appReq.organization_id);
+            const exc = exceptionEngine.transitionException(excId, 'executed', appReq.organization_id);
 
-          if (action === 'modify' && modification) {
-            udmStore.updateException(exc.id, {
-              recommended_action: modification.recommended_action || exc.recommended_action,
-              ...(modification.category ? { type: modification.category } : {}),
-            });
+            if (action === 'modify' && modification) {
+              udmStore.updateException(exc.id, {
+                recommended_action: modification.recommended_action || exc.recommended_action,
+                ...(modification.category ? { type: modification.category } : {}),
+              });
+            }
           }
-        }
+        });
       }
     }
 
@@ -196,9 +198,11 @@ export async function POST(
         corrected_tax_rate: rate,
       });
       if (!sourceResult.success) throw new Error(sourceResult.error || 'ERP writeback failed.');
-      udmStore.updateInvoice(invoice.id, {
-        tax_amount_minor_units: Math.round(invoice.amount_minor_units * rate / 100),
-      }, reviewerUserId);
+      await udmStore.transaction(() => {
+        udmStore.updateInvoice(invoice.id, {
+          tax_amount_minor_units: Math.round(invoice.amount_minor_units * rate / 100),
+        }, reviewerUserId);
+      });
     }
 
     if (action === 'approve' || action === 'modify') {

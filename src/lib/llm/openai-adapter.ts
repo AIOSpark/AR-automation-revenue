@@ -2,7 +2,7 @@
 // Uses native fetch to call OpenAI-compatible APIs (OpenAI, Azure OpenAI, Gemini, Mistral, etc.).
 // API keys are read server-side from environment variables only.
 // Server-only: API keys and provider configuration must never reach client bundles.
-import 'server-only';
+import './server-only';
 
 import {
   LLMMessage,

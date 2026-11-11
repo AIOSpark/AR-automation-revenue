@@ -14,7 +14,7 @@ export interface DashboardMetricsResult {
 }
 
 /** Helper to compute true outstanding balance for an invoice
- * Subtracts matched payments from total invoice minor units.
+ * Formula: Outstanding = Gross Invoice Amount - Matched Payments - Active Credit Allocations
  * Derives orgId from the active AsyncLocalStorage request context.
  */
 export function getInvoiceOutstandingBalance(invoice: Invoice): number {
@@ -24,8 +24,44 @@ export function getInvoiceOutstandingBalance(invoice: Invoice): number {
   }
   const matches = udmStore.getMatches().filter((m) => m.invoice_id === invoice.id && m.organization_id === orgId);
   const paidMatchedSum = matches.reduce((acc, m) => acc + m.matched_amount_minor_units, 0);
-  const outstanding = invoice.amount_minor_units - paidMatchedSum;
+  const allocations = udmStore.getCreditAllocations().filter(
+    (a) => a.invoice_id === invoice.id && a.status === 'allocated' && a.organization_id === orgId,
+  );
+  const creditAllocatedSum = allocations.reduce((acc, a) => acc + a.allocated_amount_minor_units, 0);
+  const outstanding = invoice.amount_minor_units - paidMatchedSum - creditAllocatedSum;
   return Math.max(0, outstanding);
+}
+
+/** Settlement breakdown for an invoice
+ * Returns gross amount, paid matched amount, credit allocated amount, and net outstanding.
+ */
+export function getInvoiceSettlementBreakdown(invoice: Invoice): {
+  grossAmountMinorUnits: number;
+  paidMatchedMinorUnits: number;
+  creditAllocatedMinorUnits: number;
+  outstandingMinorUnits: number;
+  isFullySettled: boolean;
+} {
+  const orgId = getRequestTenant();
+  if (!orgId) {
+    throw new Error('Missing tenant context: orgId not available in current request context');
+  }
+  const matches = udmStore.getMatches().filter((m) => m.invoice_id === invoice.id && m.organization_id === orgId);
+  const paidMatchedSum = matches.reduce((acc, m) => acc + m.matched_amount_minor_units, 0);
+
+  const creditAllocs = udmStore.getCreditAllocations().filter(
+    (a) => a.invoice_id === invoice.id && a.status === 'allocated' && a.organization_id === orgId,
+  );
+  const creditAllocatedSum = creditAllocs.reduce((acc, a: any) => acc + a.allocated_amount_minor_units, 0);
+
+  const outstanding = invoice.amount_minor_units - paidMatchedSum - creditAllocatedSum;
+  return {
+    grossAmountMinorUnits: invoice.amount_minor_units,
+    paidMatchedMinorUnits: paidMatchedSum,
+    creditAllocatedMinorUnits: creditAllocatedSum,
+    outstandingMinorUnits: Math.max(0, outstanding),
+    isFullySettled: Math.max(0, outstanding) === 0,
+  };
 }
 
 /** Metric 1: Total Receivables

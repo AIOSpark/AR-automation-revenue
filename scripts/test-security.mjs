@@ -1,5 +1,9 @@
 import { runSecurityCITestSuite } from '../src/lib/testing/__tests__/security-ci.test.ts';
 
+// Set test environment variables BEFORE any store imports
+process.env.AIOSPARK_TEST_MODE = 'true';
+process.env.AIOSPARK_SESSION_SECRET = 'test-security-session-secret-0123456789abcdef';
+
 runSecurityCITestSuite()
   .then(({ failed }) => {
     if (failed > 0) {

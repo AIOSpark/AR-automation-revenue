@@ -1,5 +1,3 @@
-const DEVELOPMENT_SIGNING_SECRET = "local-development-session-secret";
-
 export function isAuthTestMode(): boolean {
   return process.env.AIOSPARK_TEST_MODE === "true" && process.env.NODE_ENV !== "production";
 }
@@ -23,12 +21,14 @@ export function isAuthProviderConfigured(): boolean {
 export function getAuthSigningSecret(): string | null {
   const configured = process.env.AIOSPARK_SESSION_SECRET;
   if (configured) return configured;
-  if (isDevAuthEnabled()) return DEVELOPMENT_SIGNING_SECRET;
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "Production authentication requires AIOSPARK_SESSION_SECRET to be set. " +
-      "Development session secrets are not usable in production."
-    );
-  }
   return null;
+}
+
+export function isSessionSecretStrong(secret: string | null): boolean {
+  if (!secret) return false;
+  // A session signing secret must provide at least 256 bits of entropy.
+  // Provision with: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+  // which yields 43 base64url characters. Reject predictable / short values.
+  const base64Url = /^[A-Za-z0-9_-]+$/;
+  return base64Url.test(secret) && secret.length >= 43;
 }
