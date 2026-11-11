@@ -6,7 +6,7 @@ import { parsePagination } from '@/lib/api/pagination';
 export async function GET(req: Request) {
   try {
     const context = await resolveTenantContext(req);
-    const permissionError = validatePermission(context, 'view', 'invoices');
+    const permissionError = validatePermission(context, 'view', 'payments');
     if (permissionError) return permissionError;
     const { searchParams } = new URL(req.url);
     const orgId = context!.organization.id;

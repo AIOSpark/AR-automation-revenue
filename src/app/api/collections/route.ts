@@ -9,7 +9,7 @@ import { validatePilotReadOnly } from '@/lib/auth/pilot';
 export async function GET(req: Request) {
   try {
     const context = await resolveTenantContext(req);
-    const permissionError = validatePermission(context, 'view', 'invoices');
+    const permissionError = validatePermission(context, 'view', 'collections');
     if (permissionError) return permissionError;
     const { searchParams } = new URL(req.url);
     const orgId = context!.organization.id;
@@ -59,7 +59,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
     const context = await resolveTenantContext(req);
-    const permissionError = validatePermission(context, 'edit', 'invoices');
+    const permissionError = validatePermission(context, 'create', 'collections');
     if (permissionError) return permissionError;
     const organizationId = context!.organization.id;
 

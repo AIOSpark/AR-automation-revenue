@@ -12,7 +12,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "npm run verify",
-    "verify": "set +e; npm run lint; L=$?; npm run typecheck; T=$?; npm run test:scan; S=$?; npm run test:master; M=$?; npm run test:financial-stress; F=$?; npm run test:durability; D=$?; npm run test:pilot-security; P=$?; RC=0; [ $L -eq 0 ] || RC=1; [ $T -eq 0 ] || RC=1; [ $S -eq 0 ] || RC=1; [ $M -eq 0 ] || RC=1; [ $F -eq 0 ] || RC=1; [ $D -eq 0 ] || RC=1; [ $P -eq 0 ] || RC=1; exit $RC",
+    "verify": "set +e; npm run lint; L=$?; npm run typecheck; T=$?; npm run test:scan; S=$?; npm run test:master; M=$?; npm run test:financial-stress; F=$?; npm run test:durability; D=$?; npm run test:concurrency; C=$?; npm run test:cross-namespace; N=$?; npm run test:financial-rbac; R=$?; npm run test:backup; B=$?; npm run test:pilot-security; P=$?; RC=0; [ $L -eq 0 ] || RC=1; [ $T -eq 0 ] || RC=1; [ $S -eq 0 ] || RC=1; [ $M -eq 0 ] || RC=1; [ $F -eq 0 ] || RC=1; [ $D -eq 0 ] || RC=1; [ $C -eq 0 ] || RC=1; [ $N -eq 0 ] || RC=1; [ $R -eq 0 ] || RC=1; [ $B -eq 0 ] || RC=1; [ $P -eq 0 ] || RC=1; exit $RC",
     "test:scan": "node scripts/security-scan.mjs",
     "test:external": "node --import ./scripts/test-only-server-modules.mjs scripts/test-external-release.mjs",
     "test:unit": "AIOSPARK_TEST_MODE=true node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-unit.mjs",
@@ -52,6 +52,14 @@
     "test:discipline": "AIOSPARK_TEST_MODE=true node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-discipline.mjs",
     "test:master": "AIOSPARK_TEST_MODE=true node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-master.mjs",
     "test:durability": "AIOSPARK_DB_PATH=/tmp/aiospark-durability-test.sqlite AIOSPARK_TEST_MODE=false node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-durability.mjs",
+    "test:concurrency": "node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-concurrency.mjs",
+    "test:cross-namespace": "node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-cross-namespace.mjs",
+    "test:financial-rbac": "node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-financial-rbac.mjs",
+    "test:backup": "node scripts/test-backup-restore.mjs",
+    "backup": "node scripts/sqlite-backup.mjs backup",
+    "backup:verify": "node scripts/sqlite-backup.mjs verify",
+    "backup:restore-verify": "node scripts/sqlite-backup.mjs restore-verify",
+    "backup:schedule": "node scripts/sqlite-backup.mjs schedule",
     "test:pilot-security": "AIOSPARK_DB_PATH=/tmp/aiospark-pilot-test.sqlite AIOSPARK_TEST_MODE=false node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-pilot-security.mjs"
   },
   "dependencies": {

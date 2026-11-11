@@ -93,12 +93,16 @@ export async function POST(request: Request) {
       // Persist the pending checkout intent without granting the plan. The
       // verified webhook is the only path that activates a paid plan.
       const current = billingStore.getSubscription(organizationId);
-      billingStore.setSubscription(organizationId, {
-        plan_id: current.plan_id,
-        status: current.status,
-        pending_plan_id: planId,
-        pending_razorpay_subscription_id: subscription.subscriptionId,
-      });
+      billingStore.setSubscription(
+        organizationId,
+        {
+          plan_id: current.plan_id,
+          status: current.status,
+          pending_plan_id: planId,
+          pending_razorpay_subscription_id: subscription.subscriptionId,
+        },
+        { expectedVersion: current.version ?? 0 }
+      );
 
       const response = { success: true, action: 'create_subscription', ...subscription };
 

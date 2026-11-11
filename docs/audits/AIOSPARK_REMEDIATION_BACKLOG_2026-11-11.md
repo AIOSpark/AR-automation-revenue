@@ -194,7 +194,9 @@ This register contains issues discovered during the independent current-state as
 | Dependencies | `src/lib/db/*`, all stores (`udmStore`, `authStore`, `billingStore`, `audit`) |
 | Acceptance Criteria | Single authoritative database; relational constraints enforced; migrations present; dead code removed or activated. |
 | Verification | Database integrity check; concurrency test showing no lost updates. |
-| Status | Confirmed |
+| Status | **PARTIALLY RESOLVED — 2026-11-11** |
+| Resolution | SQLite (`repository_snapshots`) is now the single persistence engine; dead PGlite client/schema files removed. Financial mutations take `BEGIN IMMEDIATE`, reload committed state, validate referential/tenant/idempotency invariants, and commit atomically. Schema versioning and legacy-snapshot compatibility added. **Remaining gap:** financial records are still a validated JSON snapshot, not normalized rows with SQL foreign keys/CHECK constraints. |
+| Evidence | [HIGH-009/010 verification log](./AIOSPARK_HIGH-009-010_VERIFICATION_2026-11-11.md) — 30/30 cross-process checks, 187/187 master, 27/27 durability, build and typecheck pass. |
 
 ---
 
@@ -214,7 +216,10 @@ This register contains issues discovered during the independent current-state as
 | Dependencies | `src/lib/db/durable-repository.ts`, `src/lib/udm/store.ts` |
 | Acceptance Criteria | Concurrent financial mutations to same org do not lose updates; no silent overwrite. |
 | Verification | Multi-process concurrent write test. |
-| Status | Confirmed (single-process verified safe; multi-process risk confirmed by architecture review) |
+| Status | **CLOSED — 2026-11-11 (scoped to UDM financial flows)** |
+| Closure evidence | `BEGIN IMMEDIATE` serializes processes; every UDM mutation reloads committed state under lock. New `test:concurrency` spawns real OS processes: 8 identical idempotency keys → 1 invoice; 8 concurrent matches/payments on one invoice → all 8 preserved; SIGKILL mid-transaction → 0 partial records; concurrent org A/B writes stay isolated; legacy snapshot upgrade preserves data. 30/30 passed. |
+| Residual risk (resolved by HIGH-010R, 2026-11-11) | The earlier two-process probe showed stale B overwriting A's approval. HIGH-010R now reloads approvals and billing under `BEGIN IMMEDIATE`; approval conflicts return HTTP 409; subscription updates use `expectedVersion` and return `BILLING_SUBSCRIPTION_CONFLICT`; audit appends join the business transaction. Verified by `test:cross-namespace` (5/5). See [HIGH-010R verification](./AIOSPARK_HIGH-010R_VERIFICATION_2026-11-11.md). |
+| Log | [HIGH-009/010 verification log](./AIOSPARK_HIGH-009-010_VERIFICATION_2026-11-11.md) |
 
 ---
 
@@ -254,7 +259,8 @@ This register contains issues discovered during the independent current-state as
 | Dependencies | `src/lib/tenant/permissions.ts`, `src/lib/tenant/middleware.ts` |
 | Acceptance Criteria | Every financial mutation route enforces a role-based permission; least-privilege roles cannot create payments/credit notes; verified per resource/role before pilot. |
 | Verification | Authorization test per financial resource/role. |
-| Status | Confirmed (elevated from MED-002 per Correction A) |
+| Status | **CLOSED — 2026-11-11** |
+| Closure evidence | `permissions.ts` now models `payments`, `credit_notes`, `reconciliation`, `collections`, `cash_unblock` with view/create/edit/approve/execute/reverse/export actions. Route gates use those resources: payments read, reconciliation read/create/execute, collections read/create, cash-unblock read/edit/execute, exceptions edit plus approve for terminal decisions, promises under collections, and approval execution additionally checks the underlying resource (credit notes, reconciliation, invoices). New `test:financial-rbac` exercises actual route handlers: 21/21 passed, including 403s for Viewer/Finance Executive, allowed Owner/Viewer reads, cross-tenant 401/404 rejection, unauthenticated 401, and platform-admin separation. Master 187/187, security 12/12, financial 54/54, tenant 8/8, TypeScript and build pass. No direct credit-note HTTP create/allocation/reversal route exists; issuance remains reachable only through the now resource-gated approval execution path. |
 
 ---
 
@@ -311,7 +317,8 @@ This register contains issues discovered during the independent current-state as
 | Dependencies | Production deployment infrastructure |
 | Acceptance Criteria | Automated daily backup; restore test succeeds; backup alerts on failure. |
 | Verification | Restore-from-backup drill. |
-| Status | Confirmed |
+| Status | **CLOSED — 2026-11-11 (HIGH-012)** |
+| Closure evidence | `scripts/sqlite-backup.mjs` now uses `VACUUM INTO` for a consistent WAL-inclusive snapshot, verifies before atomic publish, preserves the previous backup on failure, applies count-based retention, writes failure status and optionally alerts a generic webhook, and verifies restores only in an isolated temporary database. `scripts/test-backup-restore.mjs` (`npm run test:backup`) passes 11/11: WAL-only committed data, financial counts, retention, failed-backup preservation, webhook alert without customer data, corrupt-backup rejection, CLI verification, automated `schedule --once`, and isolated restore with an unchanged live database. Runbook: `docs/runbooks/BACKUP_RESTORE_RUNBOOK.md`. |
 
 ---
 

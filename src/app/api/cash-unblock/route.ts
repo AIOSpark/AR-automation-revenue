@@ -9,7 +9,7 @@ import { validatePilotReadOnly } from '@/lib/auth/pilot';
 export async function GET(request: Request) {
   try {
     const context = await resolveTenantContext(request);
-    const permissionError = validatePermission(context, 'view', 'invoices');
+    const permissionError = validatePermission(context, 'view', 'cash_unblock');
     if (permissionError) return permissionError;
     const { searchParams } = new URL(request.url);
     const orgId = context!.organization.id;
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const context = await resolveTenantContext(request);
-    const permissionError = validatePermission(context, 'edit', 'invoices');
+    const permissionError = validatePermission(context, 'edit', 'cash_unblock');
     if (permissionError) return permissionError;
 
     const body = await request.json();
@@ -61,6 +61,8 @@ export async function POST(request: Request) {
     // action is not supported — actions must flow through the Approval Center
     // for human review and authorization before execution.
     if (actionType === 'EXECUTE_ACTION') {
+      const executePermissionError = validatePermission(context, 'execute', 'cash_unblock');
+      if (executePermissionError) return executePermissionError;
       return NextResponse.json({
         success: false,
         error: 'Direct execution not supported. Submit actions through the Approval Center for human review and authorization.',

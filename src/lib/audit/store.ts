@@ -1,6 +1,6 @@
 // AIOSpark Audit System Store & Types (Layer 26)
 // Provides a canonical, provably immutable append-only audit trail with RLS and trigger enforcement.
-import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
+import { deleteSnapshot, getDurableStatePath, isInWriteTransaction, readSnapshot, withWriteTransaction, writeSnapshot } from '../db/durable-repository';
 
 export type ActorType = 'user' | 'agent' | 'system';
 
@@ -56,8 +56,7 @@ class AuditStore {
   private auditLogProxy: AuditLogRecord[];
 
   constructor() {
-    const persisted = readSnapshot<AuditLogRecord[]>('audit') || [];
-    this.rawStore.internalLogs.push(...persisted);
+    this.reloadFromDurableState();
     // Database-level immutability enforcement simulation:
     // Uses ES6 Proxy to intercept and REJECT any attempt to mutate, update, reassign or delete array elements or properties.
     const rawArray = this.rawStore.internalLogs;
@@ -82,8 +81,21 @@ class AuditStore {
     });
   }
 
+  private reloadFromDurableState(): void {
+    if (getDurableStatePath() === ':memory:') return;
+    const persisted = readSnapshot<AuditLogRecord[]>('audit') || [];
+    this.rawStore.internalLogs.length = 0;
+    this.rawStore.internalLogs.push(...persisted);
+  }
+
+  private refreshForRead(): void {
+    if (!isInWriteTransaction()) this.reloadFromDurableState();
+  }
+
   /**
-   * Append-only record insertion
+   * Append-only record insertion. The append joins the caller's transaction
+   * when one exists, so a business mutation and its audit event commit or roll
+   * back together. Cache is restored if the durable write fails.
    */
   public record(params: RecordAuditParams): AuditLogRecord {
     if (!params.organization_id) {
@@ -104,11 +116,18 @@ class AuditStore {
       created_at,
     };
 
-    // Push into proxied append-only array
-    this.auditLogProxy.push(record);
-    writeSnapshot('audit', this.rawStore.internalLogs);
-
-    return record;
+    return withWriteTransaction(() => {
+      this.reloadFromDurableState();
+      const previousLength = this.rawStore.internalLogs.length;
+      this.rawStore.internalLogs.push(record);
+      try {
+        writeSnapshot('audit', this.rawStore.internalLogs);
+      } catch (error) {
+        this.rawStore.internalLogs.length = previousLength;
+        throw error;
+      }
+      return record;
+    });
   }
 
   /**
@@ -119,6 +138,7 @@ class AuditStore {
       throw new Error('Tenant Context Error: organizationId is required to query audit_log');
     }
 
+    this.refreshForRead();
     return this.rawStore.internalLogs
       .filter((log) => {
         // Enforce RLS

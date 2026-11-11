@@ -3,7 +3,7 @@
 
 import { AuditService } from '../audit/service';
 import { aiQualityStore } from '../observability/ai-quality';
-import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
+import { deleteSnapshot, getDurableStatePath, isInWriteTransaction, readSnapshot, withWriteTransaction, writeSnapshot } from '../db/durable-repository';
 
 export type ApprovalActionType =
   | 'ALTER_INVOICE_VALUE'
@@ -62,6 +62,19 @@ type ApprovalState = {
   autonomyConfigs: GraduatedAutonomyConfig[];
 };
 
+/**
+ * Raised when a competing process has already made a terminal decision.
+ * Routes translate this to HTTP 409 rather than overwriting the decision.
+ */
+export class ApprovalConflictError extends Error {
+  public readonly code = 'APPROVAL_DECISION_CONFLICT';
+
+  constructor(id: string, status: ApprovalStatus) {
+    super(`Approval request ${id} is already ${status}`);
+    this.name = 'ApprovalConflictError';
+  }
+}
+
 class ApprovalStore {
   private requests: Map<string, ApprovalRequest> = new Map();
   // APPEND-ONLY LOG: Array preserves append-only ordering
@@ -69,11 +82,40 @@ class ApprovalStore {
   private autonomyConfigs: Map<string, GraduatedAutonomyConfig> = new Map();
 
   constructor() {
+    this.reloadFromDurableState();
+  }
+
+  /**
+   * Replace local caches with the latest committed snapshot. Called after the
+   * database write lock is acquired, so a decision validates the current state.
+   */
+  private reloadFromDurableState(): void {
+    // Test-mode in-memory stores have no durable snapshot to reload from.
+    if (getDurableStatePath() === ':memory:') return;
     const state = readSnapshot<ApprovalState>('approvals');
-    if (!state) return;
-    this.requests = new Map(state.requests.map((item) => [item.id, item]));
-    this.logs = state.logs;
-    this.autonomyConfigs = new Map(state.autonomyConfigs.map((item) => [item.id, item]));
+    this.requests = new Map((state?.requests || []).map((item) => [item.id, item]));
+    this.logs = state?.logs || [];
+    this.autonomyConfigs = new Map((state?.autonomyConfigs || []).map((item) => [item.id, item]));
+  }
+
+  private refreshForRead(): void {
+    if (!isInWriteTransaction()) this.reloadFromDurableState();
+  }
+
+  /**
+   * Run one mutation inside `BEGIN IMMEDIATE`, after reloading committed state.
+   * On failure the cache is reloaded so a rolled-back decision is not visible.
+   */
+  private runMutation<T>(callback: () => T): T {
+    try {
+      return withWriteTransaction(() => {
+        this.reloadFromDurableState();
+        return callback();
+      });
+    } catch (error) {
+      this.reloadFromDurableState();
+      throw error;
+    }
   }
 
   private persist(): void {
@@ -87,6 +129,7 @@ class ApprovalStore {
   public createRequest(
     data: Omit<ApprovalRequest, 'id' | 'status' | 'created_at'>
   ): ApprovalRequest {
+    return this.runMutation(() => {
     const id = `appr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
 
@@ -126,13 +169,16 @@ class ApprovalStore {
     });
 
     return req;
+    });
   }
 
   public getRequest(id: string): ApprovalRequest | null {
+    this.refreshForRead();
     return this.requests.get(id) || null;
   }
 
   public getRequests(orgId: string, statusFilter?: ApprovalStatus): ApprovalRequest[] {
+    this.refreshForRead();
     const orgReqs = Array.from(this.requests.values()).filter((r) => r.organization_id === orgId);
     if (statusFilter) {
       return orgReqs.filter((r) => r.status === statusFilter);
@@ -141,15 +187,17 @@ class ApprovalStore {
   }
 
   public findByIdempotencyKey(orgId: string, idempotencyKey: string): ApprovalRequest | null {
+    this.refreshForRead();
     return Array.from(this.requests.values()).find(
       (request) => request.organization_id === orgId && request.proposed_action?.idempotency_key === idempotencyKey
     ) || null;
   }
 
   public approveRequest(id: string, reviewerUserId: string): ApprovalRequest {
+    return this.runMutation(() => {
     const req = this.requests.get(id);
     if (!req) throw new Error(`Approval request not found: ${id}`);
-    if (req.status !== 'pending') throw new Error(`Approval request ${id} is already ${req.status}`);
+    if (req.status !== 'pending') throw new ApprovalConflictError(id, req.status);
 
     const now = new Date().toISOString();
     const beforeState = { status: req.status };
@@ -189,12 +237,14 @@ class ApprovalStore {
     this.persist();
 
     return req;
+    });
   }
 
   public rejectRequest(id: string, reviewerUserId: string, reason?: string): ApprovalRequest {
+    return this.runMutation(() => {
     const req = this.requests.get(id);
     if (!req) throw new Error(`Approval request not found: ${id}`);
-    if (req.status !== 'pending') throw new Error(`Approval request ${id} is already ${req.status}`);
+    if (req.status !== 'pending') throw new ApprovalConflictError(id, req.status);
 
     const now = new Date().toISOString();
     const beforeState = { status: req.status };
@@ -235,6 +285,7 @@ class ApprovalStore {
     this.persist();
 
     return req;
+    });
   }
 
   public modifyAndApproveRequest(
@@ -242,9 +293,10 @@ class ApprovalStore {
     reviewerUserId: string,
     modificationPayload: Record<string, any>
   ): ApprovalRequest {
+    return this.runMutation(() => {
     const req = this.requests.get(id);
     if (!req) throw new Error(`Approval request not found: ${id}`);
-    if (req.status !== 'pending') throw new Error(`Approval request ${id} is already ${req.status}`);
+    if (req.status !== 'pending') throw new ApprovalConflictError(id, req.status);
 
     const now = new Date().toISOString();
     const beforeState = { status: req.status, proposed_action: req.proposed_action };
@@ -294,9 +346,11 @@ class ApprovalStore {
     this.persist();
 
     return req;
+    });
   }
 
   public markExecutionResult(id: string, result: 'succeeded' | 'failed', error?: string): ApprovalRequest {
+    return this.runMutation(() => {
     const req = this.requests.get(id);
     if (!req) throw new Error(`Approval request not found: ${id}`);
     if (req.status !== 'approved') throw new Error(`Approval request ${id} is not approved`);
@@ -329,6 +383,7 @@ class ApprovalStore {
     this.persist();
 
     return req;
+    });
   }
 
   // --- APPEND-ONLY LOG GUARANTEE ---
@@ -338,6 +393,7 @@ class ApprovalStore {
   }
 
   public getLogs(requestId?: string): ApprovalLogEntry[] {
+    this.refreshForRead();
     if (requestId) {
       return this.logs.filter((l) => l.approval_request_id === requestId);
     }
@@ -346,11 +402,14 @@ class ApprovalStore {
 
   // --- GRADUATED AUTONOMY CONFIG STORE ---
   public setAutonomyConfig(config: GraduatedAutonomyConfig): void {
-    this.autonomyConfigs.set(config.id, config);
-    this.persist();
+    this.runMutation(() => {
+      this.autonomyConfigs.set(config.id, config);
+      this.persist();
+    });
   }
 
   public getAutonomyConfig(orgId: string, actionType: string): GraduatedAutonomyConfig | null {
+    this.refreshForRead();
     const key = `${orgId}:${actionType}`;
     const cfg = Array.from(this.autonomyConfigs.values()).find(
       (c) => c.organization_id === orgId && c.action_type === actionType

@@ -1,5 +1,6 @@
 // AIOSpark Usage Tracking & Plan Definition Store (Layer 27)
-import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
+import { deleteSnapshot, getDurableStatePath, isInWriteTransaction, readSnapshot, withWriteTransaction, writeSnapshot } from '../db/durable-repository';
+import { AuditService } from '../audit/service';
 
 export type UsageEventType =
   | 'invoice.processed'
@@ -67,6 +68,16 @@ export interface OrganizationSubscription {
   cancelled_at?: string | null;
   created_at: string;
   updated_at: string;
+  version?: number;
+}
+
+export class BillingConflictError extends Error {
+  public readonly code = 'BILLING_SUBSCRIPTION_CONFLICT';
+
+  constructor(orgId: string) {
+    super(`Subscription for organization ${orgId} was changed by another process; reload and retry`);
+    this.name = 'BillingConflictError';
+  }
 }
 
 export interface UsageSummary {
@@ -253,12 +264,33 @@ class UsageAndBillingStore {
   private refundEvents: Map<string, RefundEvent> = new Map(); // Keyed by provider_refund_id
 
   constructor() {
+    this.reloadFromDurableState();
+  }
+
+  private reloadFromDurableState(): void {
+    if (getDurableStatePath() === ':memory:') return;
     const state = readSnapshot<{ events: UsageEvent[]; subscriptions: OrganizationSubscription[]; payments: Payment[]; webhookEvents: WebhookEvent[]; refundEvents: RefundEvent[] }>('billing');
     this.events = state?.events || [];
     this.subscriptions = new Map((state?.subscriptions || []).map((subscription) => [subscription.organization_id, subscription]));
     this.payments = new Map((state?.payments || []).map((payment) => [payment.id, payment]));
     this.webhookEvents = new Map((state?.webhookEvents || []).map((event) => [event.provider_event_id, event]));
     this.refundEvents = new Map((state?.refundEvents || []).map((refund) => [refund.provider_refund_id, refund]));
+  }
+
+  private refreshForRead(): void {
+    if (!isInWriteTransaction()) this.reloadFromDurableState();
+  }
+
+  private runMutation<T>(callback: () => T): T {
+    try {
+      return withWriteTransaction(() => {
+        this.reloadFromDurableState();
+        return callback();
+      });
+    } catch (error) {
+      this.reloadFromDurableState();
+      throw error;
+    }
   }
 
   private persist(): void {
@@ -272,6 +304,7 @@ class UsageAndBillingStore {
     quantity?: number;
     metadata?: Record<string, any> | null;
   }): UsageEvent {
+    return this.runMutation(() => {
     const id = `use_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const event: UsageEvent = {
       id,
@@ -285,9 +318,11 @@ class UsageAndBillingStore {
     this.events.push(event);
     this.persist();
     return event;
+    });
   }
 
   public getEvents(orgId: string): UsageEvent[] {
+    this.refreshForRead();
     return this.events.filter((e) => e.organization_id === orgId);
   }
 
@@ -295,6 +330,7 @@ class UsageAndBillingStore {
    * Rollup materialized view calculation per organization per month
    */
   public getUsageSummary(orgId: string, period?: string): UsageSummary {
+    this.refreshForRead();
     const targetPeriod = period || new Date().toISOString().substring(0, 7); // YYYY-MM
 
     const orgEvents = this.events.filter(
@@ -336,6 +372,16 @@ class UsageAndBillingStore {
 
   // --- SUBSCRIPTION MANAGEMENT ---
   public getSubscription(orgId: string): OrganizationSubscription {
+    this.refreshForRead();
+    if (this.subscriptions.has(orgId) || isInWriteTransaction()) {
+      return this.getSubscriptionUnlocked(orgId);
+    }
+    // First read for an organization auto-creates the default plan. Do it under
+    // the write lock and re-check so two processes cannot create duplicates.
+    return this.runMutation(() => this.getSubscriptionUnlocked(orgId));
+  }
+
+  private getSubscriptionUnlocked(orgId: string): OrganizationSubscription {
     const existing = this.subscriptions.get(orgId);
     if (existing) return existing;
 
@@ -354,6 +400,7 @@ class UsageAndBillingStore {
       current_period_end: endDate.toISOString(),
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
+      version: 0,
     };
 
     this.subscriptions.set(orgId, defaultSub);
@@ -362,19 +409,52 @@ class UsageAndBillingStore {
   }
 
   public getAllSubscriptions(): Map<string, OrganizationSubscription> {
+    this.refreshForRead();
     return this.subscriptions;
   }
 
-  public setSubscription(orgId: string, sub: Partial<OrganizationSubscription> & { plan_id: PlanTierId }): OrganizationSubscription {
-    const current = this.getSubscription(orgId);
-    const updated: OrganizationSubscription = {
-      ...current,
-      ...sub,
-      updated_at: new Date().toISOString(),
-    };
-    this.subscriptions.set(orgId, updated);
-    this.persist();
-    return updated;
+  /**
+   * Apply a subscription update against the latest committed row while holding
+   * the database write lock. Expected-version callers receive a conflict if
+   * another process committed a change after they read the subscription.
+   */
+  public setSubscription(
+    orgId: string,
+    sub: Partial<OrganizationSubscription> & { plan_id: PlanTierId },
+    options: { expectedVersion?: number } = {}
+  ): OrganizationSubscription {
+    return this.runMutation(() => {
+      const current = this.getSubscriptionUnlocked(orgId);
+      const currentVersion = current.version ?? 0;
+      if (options.expectedVersion !== undefined && options.expectedVersion !== currentVersion) {
+        throw new BillingConflictError(orgId);
+      }
+
+      const updated: OrganizationSubscription = {
+        ...current,
+        ...sub,
+        version: currentVersion + 1,
+        updated_at: new Date().toISOString(),
+      };
+      this.subscriptions.set(orgId, updated);
+      this.persist();
+      AuditService.record({
+        organization_id: orgId,
+        actor_type: 'system',
+        action_type: 'subscription.updated',
+        subject_type: 'organization',
+        subject_id: orgId,
+        before_state: { plan_id: current.plan_id, status: current.status, version: currentVersion },
+        after_state: {
+          plan_id: updated.plan_id,
+          status: updated.status,
+          version: updated.version,
+          pending_plan_id: updated.pending_plan_id ?? null,
+        },
+        result: 'success',
+      });
+      return updated;
+    });
   }
 
   // --- PLAN CATALOG ---
@@ -396,15 +476,18 @@ class UsageAndBillingStore {
   // --- PAYMENTS ---
 
   public recordPayment(payment: Payment): Payment {
+    return this.runMutation(() => {
     const id = payment.id || `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
     const record: Payment = { ...payment, id, created_at: now, updated_at: now };
     this.payments.set(id, record);
     this.persist();
     return record;
+    });
   }
 
   public getAllPayments(): Payment[] {
+    this.refreshForRead();
     return Array.from(this.payments.values());
   }
 
@@ -423,11 +506,13 @@ class UsageAndBillingStore {
   }
 
   public updateWebhookEventStatus(providerEventId: string, status: WebhookEvent['status']): void {
-    const existing = this.webhookEvents.get(providerEventId);
-    if (!existing) return;
-    const updated: WebhookEvent = { ...existing, status, updated_at: new Date().toISOString() };
-    this.webhookEvents.set(providerEventId, updated);
-    this.persist();
+    this.runMutation(() => {
+      const existing = this.webhookEvents.get(providerEventId);
+      if (!existing) return;
+      const updated: WebhookEvent = { ...existing, status, updated_at: new Date().toISOString() };
+      this.webhookEvents.set(providerEventId, updated);
+      this.persist();
+    });
   }
 
   public getAbandonedProcessingEvents(maxAgeMinutes: number): WebhookEvent[] {
@@ -452,12 +537,14 @@ class UsageAndBillingStore {
   // --- REFUND EVENTS ---
 
   public recordRefundEvent(refund: Omit<RefundEvent, 'id' | 'created_at' | 'updated_at'>): RefundEvent {
+    return this.runMutation(() => {
     const id = `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
     const record: RefundEvent = { ...refund, id, created_at: now, updated_at: now };
     this.refundEvents.set(id, record);
     this.persist();
     return record;
+    });
   }
 
   public getRefundEvent(providerRefundId: string): RefundEvent | null {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { approvalStore } from '@/lib/approvals/store';
+import { ApprovalConflictError, approvalStore } from '@/lib/approvals/store';
 import { can } from '@/lib/tenant/permissions';
 import { udmStore } from '@/lib/udm/store';
 import { exceptionEngine } from '@/lib/exceptions/engine';
@@ -32,6 +32,17 @@ export async function POST(
     if (appReq.organization_id !== context!.organization.id) {
       return NextResponse.json({ error: 'Approval request not found' }, { status: 404 });
     }
+
+    // Terminal financial decisions require authority over the underlying
+    // resource, not just generic approval permission.
+    const actionResource =
+      appReq.action_type === 'ISSUE_CREDIT_NOTE'
+        ? 'credit_notes'
+        : appReq.action_type === 'RECORD_PAYMENT_MATCH' || appReq.action_type === 'ALLOCATE_PAYMENT'
+          ? 'reconciliation'
+          : 'invoices';
+    const actionPermissionError = validatePermission(context, 'approve', actionResource);
+    if (actionPermissionError) return actionPermissionError;
 
     // Read-only pilot mode: rejection is internal review only (no execution).
     // Approve/modify of financial or external actions is prohibited during pilot.
@@ -106,17 +117,27 @@ export async function POST(
   }
 
   let updatedRequest;
-  if (action === 'approve') {
-    updatedRequest = approvalStore.approveRequest(id, reviewerUserId);
-  } else if (action === 'reject') {
-    updatedRequest = approvalStore.rejectRequest(id, reviewerUserId, reason);
-  } else if (action === 'modify') {
-    if (!modification || typeof modification !== 'object' || Array.isArray(modification)) {
-      return NextResponse.json({ error: 'Modification payload is required for modify action' }, { status: 400 });
+  try {
+    if (action === 'approve') {
+      updatedRequest = approvalStore.approveRequest(id, reviewerUserId);
+    } else if (action === 'reject') {
+      updatedRequest = approvalStore.rejectRequest(id, reviewerUserId, reason);
+    } else if (action === 'modify') {
+      if (!modification || typeof modification !== 'object' || Array.isArray(modification)) {
+        return NextResponse.json({ error: 'Modification payload is required for modify action' }, { status: 400 });
+      }
+      updatedRequest = approvalStore.modifyAndApproveRequest(id, reviewerUserId, modification);
+    } else {
+      return NextResponse.json({ error: 'Invalid action. Must be approve, reject, or modify' }, { status: 400 });
     }
-    updatedRequest = approvalStore.modifyAndApproveRequest(id, reviewerUserId, modification);
-  } else {
-    return NextResponse.json({ error: 'Invalid action. Must be approve, reject, or modify' }, { status: 400 });
+  } catch (error) {
+    if (error instanceof ApprovalConflictError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 409 }
+      );
+    }
+    throw error;
   }
 
   try {
