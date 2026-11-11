@@ -9,6 +9,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
+import { RELATIONAL_SCHEMA_SQL, RELATIONAL_SCHEMA_VERSION } from './relational-schema';
+import { GOVERNANCE_SCHEMA_SQL, GOVERNANCE_SCHEMA_VERSION } from './governance-schema';
+import { OPERATIONAL_SCHEMA_SQL, OPERATIONAL_SCHEMA_VERSION } from './operational-schema';
 
 const databasePath =
   process.env.AIOSPARK_TEST_MODE === 'true'
@@ -51,9 +54,21 @@ database.exec(`
     applied_at TEXT NOT NULL
   )
 `);
+database.exec(RELATIONAL_SCHEMA_SQL);
 database.prepare(
   'INSERT OR IGNORE INTO repository_schema_migrations(version, applied_at) VALUES (?, ?)',
 ).run(1, new Date().toISOString());
+database.prepare(
+  'INSERT OR IGNORE INTO repository_schema_migrations(version, applied_at) VALUES (?, ?)',
+).run(RELATIONAL_SCHEMA_VERSION, new Date().toISOString());
+database.exec(GOVERNANCE_SCHEMA_SQL);
+database.prepare(
+  'INSERT OR IGNORE INTO repository_schema_migrations(version, applied_at) VALUES (?, ?)',
+).run(GOVERNANCE_SCHEMA_VERSION, new Date().toISOString());
+database.exec(OPERATIONAL_SCHEMA_SQL);
+database.prepare(
+  'INSERT OR IGNORE INTO repository_schema_migrations(version, applied_at) VALUES (?, ?)',
+).run(OPERATIONAL_SCHEMA_VERSION, new Date().toISOString());
 
 /**
  * Depth of the current process's explicit SQLite write transaction. SQLite
@@ -179,6 +194,17 @@ export function writeSnapshot<T>(namespace: string, value: T): void {
   });
 }
 
+/**
+ * Exact snapshot replacement for callers that already hold the write lock and
+ * have reloaded the latest state (e.g. the relational UDM compatibility view).
+ */
+export function writeSnapshotExact<T>(namespace: string, value: T): void {
+  if (databasePath === ':memory:') return;
+  withWriteTransaction(() => {
+    writeStatement.run(namespace, JSON.stringify(value), new Date().toISOString());
+  });
+}
+
 export function deleteSnapshot(namespace: string): void {
   if (databasePath === ':memory:') {
     return;
@@ -200,8 +226,24 @@ export function getDurableStatePath(): string {
   return databasePath;
 }
 
+type DirectSnapshotProvider = (namespace: string) => unknown | null;
+const directSnapshotProviders: DirectSnapshotProvider[] = [];
+
+/**
+ * Allow a relational storage layer to supply the compatibility view for legacy
+ * direct-snapshot readers. The provider must return null when it has no rows.
+ */
+export function registerDirectSnapshotProvider(provider: DirectSnapshotProvider): void {
+  directSnapshotProviders.push(provider);
+}
+
 // Direct SQLite read for independent verification (bypasses in-memory state)
 export function readSnapshotDirect<T>(namespace: string): T | null {
+  for (const provider of directSnapshotProviders) {
+    const supplied = provider(namespace);
+    if (supplied !== null && supplied !== undefined) return supplied as T;
+  }
+
   const payload = (readStatement.get(namespace) as { payload?: string } | undefined)?.payload;
   if (!payload) return null;
 
@@ -212,7 +254,7 @@ export function readSnapshotDirect<T>(namespace: string): T | null {
   }
 }
 
-export function getDatabase() {
+export function getDatabase(): DatabaseSync {
   return database;
 }
 

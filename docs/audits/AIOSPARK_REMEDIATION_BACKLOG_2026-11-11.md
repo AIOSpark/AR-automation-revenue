@@ -194,9 +194,9 @@ This register contains issues discovered during the independent current-state as
 | Dependencies | `src/lib/db/*`, all stores (`udmStore`, `authStore`, `billingStore`, `audit`) |
 | Acceptance Criteria | Single authoritative database; relational constraints enforced; migrations present; dead code removed or activated. |
 | Verification | Database integrity check; concurrency test showing no lost updates. |
-| Status | **PARTIALLY RESOLVED — 2026-11-11** |
-| Resolution | SQLite (`repository_snapshots`) is now the single persistence engine; dead PGlite client/schema files removed. Financial mutations take `BEGIN IMMEDIATE`, reload committed state, validate referential/tenant/idempotency invariants, and commit atomically. Schema versioning and legacy-snapshot compatibility added. **Remaining gap:** financial records are still a validated JSON snapshot, not normalized rows with SQL foreign keys/CHECK constraints. |
-| Evidence | [HIGH-009/010 verification log](./AIOSPARK_HIGH-009-010_VERIFICATION_2026-11-11.md) — 30/30 cross-process checks, 187/187 master, 27/27 durability, build and typecheck pass. |
+| Status | **PARTIALLY RESOLVED — 2026-11-11 (UDM v2 + governance v3)** |
+| Resolution | SQLite is the single persistence engine; dead PGlite files removed. Migration v2 normalizes UDM customers, contacts, invoices, payments, matches, credit notes/allocations, disputes/evidence, exceptions, bank transactions and idempotency keys. Migration v3 normalizes approval requests, terminal decisions, approval logs, autonomy configs, billing subscriptions and subscription history, and audit events, with FKs, CHECKs, tenant/status/version triggers, immutable decisions/audit and per-namespace migration markers. Legacy snapshots backfill transactionally and are removed only after commit. **Remaining gap:** auth/tenant, import, reconciliation and execution namespaces remain snapshot-based; non-subscription billing records intentionally remain snapshots. |
+| Evidence | [HIGH-009 relational verification](./AIOSPARK_HIGH-009_RELATIONAL_VERIFICATION_2026-11-11.md), [HIGH-009R governance verification](./AIOSPARK_HIGH-009R_VERIFICATION_2026-11-11.md) — 68/68 governance, 8/8 relational, 85/85 SIGKILL migration recovery, 30/30 concurrency, 187/187 master, full verify exit 0, build succeeds. |
 
 ---
 

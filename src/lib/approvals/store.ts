@@ -3,7 +3,17 @@
 
 import { AuditService } from '../audit/service';
 import { aiQualityStore } from '../observability/ai-quality';
-import { deleteSnapshot, getDurableStatePath, isInWriteTransaction, readSnapshot, withWriteTransaction, writeSnapshot } from '../db/durable-repository';
+import { isInWriteTransaction, withWriteTransaction } from '../db/durable-repository';
+import {
+  backfillGovernanceFromSnapshots,
+  clearApprovalState,
+  insertApprovalDecision,
+  insertApprovalLog,
+  insertApprovalRequest,
+  readApprovalState,
+  updateApprovalRequest,
+  upsertAutonomyConfig,
+} from '../db/governance-repository';
 
 export type ApprovalActionType =
   | 'ALTER_INVOICE_VALUE'
@@ -56,12 +66,6 @@ export interface GraduatedAutonomyConfig {
   min_confidence_threshold: number; // e.g. 0.95
 }
 
-type ApprovalState = {
-  requests: ApprovalRequest[];
-  logs: ApprovalLogEntry[];
-  autonomyConfigs: GraduatedAutonomyConfig[];
-};
-
 /**
  * Raised when a competing process has already made a terminal decision.
  * Routes translate this to HTTP 409 rather than overwriting the decision.
@@ -82,6 +86,7 @@ class ApprovalStore {
   private autonomyConfigs: Map<string, GraduatedAutonomyConfig> = new Map();
 
   constructor() {
+    backfillGovernanceFromSnapshots();
     this.reloadFromDurableState();
   }
 
@@ -90,12 +95,15 @@ class ApprovalStore {
    * database write lock is acquired, so a decision validates the current state.
    */
   private reloadFromDurableState(): void {
-    // Test-mode in-memory stores have no durable snapshot to reload from.
-    if (getDurableStatePath() === ':memory:') return;
-    const state = readSnapshot<ApprovalState>('approvals');
-    this.requests = new Map((state?.requests || []).map((item) => [item.id, item]));
-    this.logs = state?.logs || [];
-    this.autonomyConfigs = new Map((state?.autonomyConfigs || []).map((item) => [item.id, item]));
+    backfillGovernanceFromSnapshots();
+    const state = readApprovalState() as unknown as {
+      requests: ApprovalRequest[];
+      logs: ApprovalLogEntry[];
+      autonomyConfigs: GraduatedAutonomyConfig[];
+    };
+    this.requests = new Map((state.requests || []).map((item) => [item.id, item]));
+    this.logs = state.logs || [];
+    this.autonomyConfigs = new Map((state.autonomyConfigs || []).map((item) => [item.id, item]));
   }
 
   private refreshForRead(): void {
@@ -118,14 +126,6 @@ class ApprovalStore {
     }
   }
 
-  private persist(): void {
-    writeSnapshot<ApprovalState>('approvals', {
-      requests: Array.from(this.requests.values()),
-      logs: this.logs,
-      autonomyConfigs: Array.from(this.autonomyConfigs.values()),
-    });
-  }
-
   public createRequest(
     data: Omit<ApprovalRequest, 'id' | 'status' | 'created_at'>
   ): ApprovalRequest {
@@ -143,16 +143,18 @@ class ApprovalStore {
 
     this.requests.set(id, req);
 
-    // Write append-only log entry
-    this.appendLog({
+    // Write the request and its append-only creation log.
+    const creationLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'created',
       actor_user_id: null,
       details: { proposed_action: req.proposed_action, action_type: req.action_type },
       created_at: now,
-    });
-    this.persist();
+    };
+    insertApprovalRequest(req);
+    this.appendLog(creationLog);
+    insertApprovalLog(creationLog, req.organization_id);
 
     // Wire into Layer 26 Audit Log
     AuditService.record({
@@ -208,14 +210,18 @@ class ApprovalStore {
     req.reviewed_by_user_id = reviewerUserId;
     req.reviewed_at = now;
 
-    this.appendLog({
+    const decisionLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'approved',
       actor_user_id: reviewerUserId,
       details: { action_type: req.action_type },
       created_at: now,
-    });
+    };
+    updateApprovalRequest(req);
+    insertApprovalDecision(req);
+    this.appendLog(decisionLog);
+    insertApprovalLog(decisionLog, req.organization_id);
 
     // Wire into Layer 26 Audit Log
     AuditService.record({
@@ -234,7 +240,6 @@ class ApprovalStore {
 
     // Wire into Layer 29 Observability AI Quality Feedback Loop
     aiQualityStore.recordFromApprovalRequest(req, 'approved');
-    this.persist();
 
     return req;
     });
@@ -256,14 +261,18 @@ class ApprovalStore {
     req.reviewed_at = now;
     req.rejection_reason = reason || null;
 
-    this.appendLog({
+    const rejectionLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'rejected',
       actor_user_id: reviewerUserId,
       details: { reason: req.rejection_reason },
       created_at: now,
-    });
+    };
+    updateApprovalRequest(req);
+    insertApprovalDecision(req);
+    this.appendLog(rejectionLog);
+    insertApprovalLog(rejectionLog, req.organization_id);
 
     // Wire into Layer 26 Audit Log
     AuditService.record({
@@ -282,7 +291,6 @@ class ApprovalStore {
 
     // Wire into Layer 29 Observability AI Quality Feedback Loop
     aiQualityStore.recordFromApprovalRequest(req, 'rejected');
-    this.persist();
 
     return req;
     });
@@ -308,23 +316,28 @@ class ApprovalStore {
     req.reviewed_at = now;
     req.modification = modificationPayload;
 
-    this.appendLog({
+    const modificationLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'modified',
       actor_user_id: reviewerUserId,
       details: { original: req.proposed_action, modified: modificationPayload },
       created_at: now,
-    });
-
-    this.appendLog({
+    };
+    const modifiedApprovalLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'approved',
       actor_user_id: reviewerUserId,
       details: { was_modified: true },
       created_at: now,
-    });
+    };
+    updateApprovalRequest(req);
+    insertApprovalDecision(req);
+    this.appendLog(modificationLog);
+    this.appendLog(modifiedApprovalLog);
+    insertApprovalLog(modificationLog, req.organization_id);
+    insertApprovalLog(modifiedApprovalLog, req.organization_id);
 
     // Wire into Layer 26 Audit Log
     AuditService.record({
@@ -343,7 +356,6 @@ class ApprovalStore {
 
     // Wire into Layer 29 Observability AI Quality Feedback Loop
     aiQualityStore.recordFromApprovalRequest(req, 'modified', modificationPayload);
-    this.persist();
 
     return req;
     });
@@ -360,14 +372,17 @@ class ApprovalStore {
     req.execution_error = result === 'failed' ? (error || 'Approval execution failed') : null;
     req.executed_at = now;
 
-    this.appendLog({
+    const executionLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'executed',
       actor_user_id: req.reviewed_by_user_id || null,
       details: { result, error: req.execution_error },
       created_at: now,
-    });
+    };
+    updateApprovalRequest(req);
+    this.appendLog(executionLog);
+    insertApprovalLog(executionLog, req.organization_id);
 
     AuditService.record({
       organization_id: req.organization_id,
@@ -380,7 +395,6 @@ class ApprovalStore {
       approval_context: { approval_request_id: id, status: req.status, execution_status: result },
       result: result === 'succeeded' ? 'success' : 'failure',
     });
-    this.persist();
 
     return req;
     });
@@ -404,7 +418,7 @@ class ApprovalStore {
   public setAutonomyConfig(config: GraduatedAutonomyConfig): void {
     this.runMutation(() => {
       this.autonomyConfigs.set(config.id, config);
-      this.persist();
+      upsertAutonomyConfig(config);
     });
   }
 
@@ -427,10 +441,10 @@ class ApprovalStore {
   }
 
   public clearAll(): void {
+    clearApprovalState();
     this.requests.clear();
     this.logs = [];
     this.autonomyConfigs.clear();
-    deleteSnapshot('approvals');
   }
 }
 

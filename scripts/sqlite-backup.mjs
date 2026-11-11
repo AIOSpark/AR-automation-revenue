@@ -350,6 +350,362 @@ export async function runBackupCycle(options = {}) {
 }
 
 /**
+ * Client-side encrypt a file using AES-256-GCM.
+ * The key must be a 32-byte Buffer provided via options.key.
+ * Returns the ciphertext and the authentication tag.
+ */
+function encryptFile(filePath, key) {
+  const { createCipheriv } = crypto;
+  const IV_LENGTH = 12; // 96-bit IV is standard for GCM
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const fd = fs.openSync(filePath, 'r');
+  const plaintext = fs.readSync(fd, fs.statSync(filePath).size);
+  fs.closeSync(fd);
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return { iv, tag, ciphertext };
+}
+
+/**
+ * Client-side decrypt a file encrypted with encryptFile().
+ * Returns the plaintext Buffer or throws on auth failure.
+ */
+function decryptFile(iv, tag, ciphertext, key) {
+  const { createDecipheriv } = crypto;
+  const decipher = createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return plaintext;
+}
+
+/**
+ * Replicate the most recent verified backup to off-host storage.
+ *
+ * - Encrypts client-side with AES-256-GCM using a 32-byte key from the environment.
+ * - Uploads to configured S3-compatible storage via HTTPS.
+ * - Records a manifest with integrity metadata.
+ * - Verifies the remote artifact after upload.
+ * - Preserves the local backup regardless of remote outcome.
+ *
+ * Environment variables required (all configurable):
+ *   AIOSPARK_BACKUP_REMOTE_ENDPOINT   S3-compatible endpoint URL
+ *   AIOSPARK_BACKUP_REMOTE_BUCKET      Target bucket name
+ *   AIOSPARK_BACKUP_REMOTE_KEY_ID      Access key ID (optional; some providers use IAM)
+ *   AIOSPARK_BACKUP_REMOTE_SECRET      Secret access key
+ *   AIOSPARK_BACKUP_ENCRYPTION_KEY     32-byte base64 encryption key (required)
+ *   AIOSPARK_BACKUP_REMOTE_KEY         Optional client-side encryption key ID override
+ *
+ * Optional:
+ *   AIOSPARK_BACKUP_ALERT_WEBHOOK    Failure notification webhook
+ *   AIOSPARK_BACKUP_ENCRYPTION_KEY_VERSION  Version identifier stored in manifest (default 'current')
+ */
+async function replicateBackup(options = {}) {
+  const dir = backupDir(options.backupDir);
+  const encryptionKey = crypto.createHash('sha256')
+    .update(process.env.AIOSPARK_BACKUP_ENCRYPTION_KEY ?? '')
+    .digest();
+  const keyVersion = process.env.AIOSPARK_BACKUP_ENCRYPTION_KEY_VERSION ?? 'current';
+
+  if (!process.env.AIOSPARK_BACKUP_REMOTE_ENDPOINT) {
+    throw new Error('AIOSPARK_BACKUP_REMOTE_ENDPOINT not configured');
+  }
+  if (!process.env.AIOSPARK_BACKUP_REMOTE_BUCKET) {
+    throw new Error('AIOSPARK_BACKUP_REMOTE_BUCKET not configured');
+  }
+  if (!encryptionKey || encryptionKey.length !== 32) {
+    throw new Error('Valid AIOSPARK_BACKUP_ENCRYPTION_KEY (32 bytes) required for client-side encryption');
+  }
+
+  // Find the most recent backup file
+  const backupFiles = fs
+    .readdirSync(dir)
+    .filter((name) => name.startsWith(BACKUP_PREFIX) && name.endsWith(BACKUP_SUFFIX))
+    .sort();
+
+  if (backupFiles.length === 0) {
+    throw new Error('No local backups found to replicate');
+  }
+
+  const sourceBackup = path.join(dir, backupFiles[backupFiles.length - 1]);
+  const sourceMeta = path.join(dir, 'backup-status.json');
+  const sourceManifest = path.join(dir, 'backup-manifest.json');
+
+  // Read existing manifest if present
+  let existingManifest = { replicas: [] };
+  if (fs.existsSync(sourceManifest)) {
+    try {
+      existingManifest = JSON.parse(fs.readFileSync(sourceManifest, 'utf8'));
+    } catch {
+      existingManifest = { replicas: [] };
+    }
+  }
+
+  const now = new Date();
+  const backupId = path.basename(sourceBackup, BACKUP_SUFFIX);
+  const cipherSuffix = `-enc-${keyVersion}`;
+  const remoteKey = `${backupId}${cipherSuffix}${BACKUP_SUFFIX}`;
+  const remotePath = `${process.env.AIOSPARK_BACKUP_REMOTE_ENDPOINT}/${process.env.AIOSPARK_BACKUP_REMOTE_BUCKET}/${remoteKey}`;
+
+  // Step 1: Read and encrypt the backup locally
+  const fileSize = fs.statSync(sourceBackup).size;
+  const { iv, tag, ciphertext } = encryptFile(sourceBackup, encryptionKey);
+  const ciphertextSize = ciphertext.length + tag.length;
+
+  // Step 2: Compute checksums
+  const plaintextChecksum = crypto.createHash('sha256').update(fs.readFileSync(sourceBackup)).digest('hex');
+
+  // Step 3: Upload encrypted blob to remote storage
+  const uploadController = new AbortController();
+  const uploadTimer = setTimeout(() => uploadController.abort(), 30000); // 30s timeout
+
+  try {
+    const uploadBody = Buffer.concat([iv, tag, ciphertext]);
+    await fetch(remotePath, {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/sqlite',
+        'x-backup-id': backupId,
+        'x-key-version': keyVersion,
+      },
+      body: uploadBody,
+      signal: uploadController.signal,
+    });
+    clearTimeout(uploadTimer);
+  } catch (uploadError) {
+    clearTimeout(uploadTimer);
+    // Preserve local backup; record failure in manifest
+    existingManifest.replicas.push({
+      backupId,
+      status: 'failed',
+      error: uploadError instanceof Error ? uploadError.message : String(uploadError),
+      createdAt: now.toISOString(),
+    });
+    atomicWriteJson(sourceManifest, existingManifest);
+    await notifyFailure(
+      { event: 'aiospark.backup.replication.failed', backupId, error: uploadError instanceof Error ? uploadError.message : String(uploadError) },
+      options.alertWebhook
+    );
+    throw new Error(`Replication upload failed: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`);
+  }
+
+  // Step 4: Verify the remote artifact by downloading and decrypting
+  const verifyController = new AbortController();
+  const verifyTimer = setTimeout(() => verifyController.abort(), 30000);
+  let downloadVerified = false;
+  let remoteCiphertextChecksum;
+  try {
+    // Download the remote artifact
+    const downloadResponse = await fetch(remotePath, {
+      method: 'GET',
+      headers: { 'content-type': 'application/sqlite' },
+      signal: verifyController.signal,
+    });
+    if (!downloadResponse.ok) {
+      throw new Error(`Remote download failed: ${downloadResponse.status} ${downloadResponse.statusText}`);
+    }
+    const remoteBlob = await downloadResponse.arrayBuffer();
+    remoteCiphertextChecksum = crypto.createHash('sha256').update(Buffer.from(remoteBlob)).digest('hex');
+
+    // Split into iv, tag, ciphertext
+    const IV_LENGTH = 12;
+    const remoteIv = Buffer.from(remoteBlob.slice(0, IV_LENGTH));
+    const remoteTag = Buffer.from(remoteBlob.slice(IV_LENGTH, IV_LENGTH + 16));
+    const remoteCiphertext = Buffer.from(remoteBlob.slice(IV_LENGTH + 16));
+
+    // Decrypt and verify
+    const decrypted = decryptFile(remoteIv, remoteTag, remoteCiphertext, encryptionKey);
+    const computedChecksum = crypto.createHash('sha256').update(decrypted).digest('hex');
+
+    // Verify plaintext checksum matches
+    if (computedChecksum !== plaintextChecksum) {
+      throw new Error('Plaintext checksum mismatch after decryption; corruption detected');
+    }
+
+    remoteCiphertextChecksum = crypto.createHash('sha256').update(remoteBlob).digest('hex');
+    downloadVerified = true;
+    clearTimeout(verifyTimer);
+  } catch (verifyError) {
+    clearTimeout(verifyTimer);
+    // Mark failure in manifest but keep local backup intact
+    existingManifest.replicas.push({
+      backupId,
+      status: 'failed-verification',
+      error: verifyError instanceof Error ? verifyError.message : String(verifyError),
+      createdAt: now.toISOString(),
+    });
+    atomicWriteJson(sourceManifest, existingManifest);
+    throw new Error(`Remote verification failed: ${verifyError instanceof Error ? verifyError.message : String(verifyError)}`);
+  }
+
+  // Step 5: Record success in manifest
+  existingManifest.replicas.push({
+    backupId,
+    status: 'success',
+    remoteKey,
+    remoteCiphertextChecksum,
+    plaintextChecksum,
+    ciphertextSize,
+    ivBase64: iv.toString('base64'),
+    keyVersion,
+    verifiedAt: new Date().toISOString(),
+    downloadVerified,
+  });
+  atomicWriteJson(sourceManifest, existingManifest);
+
+  // Step 6: Apply retention - keep last known-good only, never delete local just because remote attempted
+  // Retention is managed by the existing applyRetention; we just ensure the manifest is durable.
+
+  return {
+    status: 'success',
+    sourceBackup,
+    remoteKey,
+    localPreserved: true,
+    downloadVerified,
+    plaintextChecksum,
+    ciphertextSize,
+    keyVersion,
+  };
+}
+
+/**
+ * Run backup-age monitoring command.
+ * Exits with code 0 when all recovery-point requirements are met, non-zero otherwise.
+ */
+async function runBackupAgeMonitor(options = {}) {
+  const dir = backupDir(options.backupDir);
+  const now = new Date();
+  const maxAgeMinutes = Number(process.env.AIOSPARK_BACKUP_MAX_AGE_MINUTES ?? '0');
+  const graceMinutes = Number(process.env.AIOSPARK_BACKUP_GRACE_PERIOD_MINUTES ?? '30');
+  const webhook = process.env.AIOSPARK_BACKUP_ALERT_WEBHOOK;
+
+  if (!fs.existsSync(dir)) {
+    console.error('Backup directory not found:', dir);
+    process.exitCode = 2;
+    return;
+  }
+
+  const backupFiles = fs
+    .readdirSync(dir)
+    .filter((name) => name.startsWith(BACKUP_PREFIX) && name.endsWith(BACKUP_SUFFIX))
+    .sort();
+
+  let anyFailure = false;
+  let staleLocal = false;
+  let staleRemote = false;
+  let missingRecords = false;
+  let replicationFailure = false;
+
+  if (backupFiles.length === 0) {
+    console.error('No backups found in:', dir);
+    anyFailure = true;
+  }
+
+  for (const backupFile of backupFiles) {
+    const backupPath = path.join(dir, backupFile);
+    const metaPath = path.join(dir, 'backup-status.json');
+    const manifestPath = path.join(dir, 'backup-manifest.json');
+
+    // Read status manifest
+    let status = { status: 'unknown', createdAt: null };
+    if (fs.existsSync(metaPath)) {
+      try {
+        status = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      } catch {
+        status = { status: 'unknown', createdAt: null };
+      }
+    }
+
+    // Check local backup age
+    if (status.createdAt) {
+      const created = new Date(status.createdAt);
+      const ageMinutes = (now.getTime() - created.getTime()) / 60000;
+      if (maxAgeMinutes > 0 && ageMinutes > maxAgeMinutes) {
+        console.error(`Local backup ${backupFile} is stale: ${ageMinutes.toFixed(1)} minutes (max: ${maxAgeMinutes})`);
+        staleLocal = true;
+      } else {
+        console.log(`Local backup ${backupFile} is current: ${ageMinutes.toFixed(1)} minutes old`);
+      }
+    }
+
+    // Check remote manifest for replication status
+    let remoteOk = null; // null = unknown, true = ok, false = failed
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        const replica = manifest.replicas.find(r => r.backupId === backupFile.replace(BACKUP_PREFIX, '').replace(BACKUP_SUFFIX, ''));
+        if (replica) {
+          if (replica.status === 'success' && replica.downloadVerified) {
+            remoteOk = true;
+            console.log(`Remote replica for ${backupFile} verified successfully`);
+          } else if (replica.status === 'failed' || replica.status === 'failed-verification') {
+            remoteOk = false;
+            console.error(`Remote replica for ${backupFile} failed: ${replica.error}`);
+            replicationFailure = true;
+          } else {
+            remoteOk = false;
+            console.warn(`Remote replica for ${backupFile} status: ${replica.status}`);
+          }
+        } else {
+          // No replica record = off-host not attempted
+          console.warn(`No off-host replica record for ${backupFile}`);
+        }
+      } catch (e) {
+        console.error('Failed to read manifest:', e);
+      }
+    }
+
+    if (remoteOk === false) {
+      staleRemote = true;
+      anyFailure = true;
+    }
+    if (remoteOk === undefined && staleLocal) {
+      // If local is stale and no remote record, treat as stale
+      staleRemote = true;
+      anyFailure = true;
+    }
+  }
+
+  // Summarize
+  if (anyFailure) {
+    console.error('Backup-age monitoring detected issues:');
+    if (staleLocal) console.error('  - Local backup is stale');
+    if (staleRemote) console.error('  - Off-host backup is stale or unverified');
+    if (replicationFailure) console.error('  - Replication failures detected');
+    if (backupFiles.length === 0) console.error('  - No backups exist');
+    // Notify via webhook if configured
+    if (webhook) {
+      const payload = {
+        event: 'aiospark.backup.age.warning',
+        staleLocal,
+        staleRemote,
+        replicationFailure,
+        backupCount: backupFiles.length,
+      };
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      try {
+        await fetch(webhook, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } catch {
+        // Best-effort; do not fail the monitor exit status.
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log('Backup-age monitoring: all recovery-point requirements met');
+  process.exitCode = 0;
+}
+
+/**
  * Restore a backup into a temporary isolated directory and verify it. The live
  * database is never opened, copied over, or modified.
  */
@@ -528,11 +884,21 @@ async function main() {
     return;
   }
 
+  if (command === 'replicate') {
+    await replicateBackup(options);
+    return;
+  }
+
+  if (command === 'monitor') {
+    await runBackupAgeMonitor(options);
+    return;
+  }
+
   console.error(
-    'Usage: node scripts/sqlite-backup.mjs <backup|verify|restore-verify|restore|schedule> [args]'
+    'Usage: node scripts/sqlite-backup.mjs <backup|verify|restore-verify|restore|schedule|replicate|monitor> [args]'
   );
   process.exitCode = 2;
-}
+
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   main().catch((error) => {

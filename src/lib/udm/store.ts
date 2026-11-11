@@ -4,12 +4,17 @@ import { AuditService } from '../audit/service';
 import { billingStore } from '../billing/store';
 import { setRequestTenant, getRequestTenant } from '../tenant/request-context';
 import {
-  deleteSnapshot,
   getDurableStatePath,
   readSnapshot,
   withWriteTransaction,
-  writeSnapshot,
 } from '../db/durable-repository';
+import {
+  backfillUdmFromSnapshot,
+  readUdmRelationalState,
+  writeUdmRelationalDelta,
+  writeUdmRelationalInvoices,
+  writeUdmRelationalState,
+} from '../db/relational-repository';
 
 import {
   Customer,
@@ -68,6 +73,9 @@ class UniversalDataStore {
   private _pendingNotifications: Set<string> = new Set();
   private _transactionLock: Promise<unknown> = Promise.resolve(); // Serializes in-process transactions
   private apiIdempotencyKeys: Map<string, { recordId: string | null; fingerprint: string; response: unknown }> = new Map(); // Keyed by orgId:endpoint:key
+  private lastPersistedState: UDMState | null = null;
+  private dirtyInvoices: Set<string> = new Set();
+  private forceFullProjection = false;
 
   /** Callback invoked on any data mutation for cache invalidation (e.g. dashboard metrics). */
   private onDataChange: ((orgId: string) => void) | null = null;
@@ -102,8 +110,21 @@ class UniversalDataStore {
   private reloadFromDurableState(force = false): void {
     if (getDurableStatePath() === ':memory:') return;
     if (this._writeDepth > 0 && !force) return;
+
+    // Migrate a legacy JSON snapshot once, then read the relational tables as
+    // the authoritative representation.
+    backfillUdmFromSnapshot();
+    const relational = readUdmRelationalState();
+    if (relational) {
+      this.applyState(relational as unknown as UDMState);
+      this.lastPersistedState = structuredClone(this.captureState());
+      return;
+    }
+
+    // No relational rows yet: an absent snapshot means a genuinely empty DB.
     const state = readSnapshot<UDMState>('udm');
     this.applyState(state);
+    this.lastPersistedState = state ? structuredClone(this.captureState()) : null;
   }
 
   private applyState(state: UDMState | null): void {
@@ -201,6 +222,9 @@ class UniversalDataStore {
         return callback();
       } catch (error) {
         this.applyState(before);
+        this.lastPersistedState = structuredClone(before);
+        this.dirtyInvoices.clear();
+        this.forceFullProjection = false;
         throw error;
       } finally {
         this._writeDepth = 0;
@@ -334,7 +358,22 @@ class UniversalDataStore {
   private persist(): void {
     const state = this.captureState();
     this.validateState(state);
-    writeSnapshot<UDMState>('udm', state);
+    const invoiceFastPath = !this.forceFullProjection && this.dirtyInvoices.size > 0;
+
+    // Relational tables are the authoritative store. Invoice-only mutations
+    // use a focused upsert so large imports do not rewrite unrelated rows.
+    withWriteTransaction(() => {
+      if (invoiceFastPath) {
+        writeUdmRelationalInvoices(
+          state.invoices.filter((invoice) => this.dirtyInvoices.has(invoice.id)),
+        );
+      } else {
+        writeUdmRelationalDelta(state, this.lastPersistedState);
+      }
+    });
+    this.dirtyInvoices.clear();
+    this.forceFullProjection = false;
+    if (!invoiceFastPath) this.lastPersistedState = structuredClone(state);
   }
 
   /**
@@ -560,9 +599,11 @@ class UniversalDataStore {
     const now = new Date().toISOString();
     const record: Invoice = { ...data, id, created_at: now, updated_at: now };
     this.invoices.set(id, record);
+    this.dirtyInvoices.add(id);
 
     if (data.idempotency_key) {
       this.idempotencyKeys.set(`${data.organization_id}:${data.idempotency_key}`, id);
+      this.forceFullProjection = true;
     }
 
     this.persist();
@@ -607,6 +648,7 @@ class UniversalDataStore {
       updated_at: new Date().toISOString(),
     };
     this.invoices.set(id, updated);
+    this.dirtyInvoices.add(id);
     this.persist();
     this.notifyDataChange(existing.organization_id);
 
@@ -1133,6 +1175,8 @@ class UniversalDataStore {
   }
 
   private clearAllInternal(): void {
+    this.forceFullProjection = true;
+    this.dirtyInvoices.clear();
     this.customers.clear();
     this.contacts.clear();
     this.invoices.clear();
@@ -1145,7 +1189,8 @@ class UniversalDataStore {
     this.exceptions.clear();
     this.bankTransactions.clear();
     this.idempotencyKeys.clear();
-    deleteSnapshot('udm');
+    this.apiIdempotencyKeys.clear();
+    this.persist();
   }
 }
 

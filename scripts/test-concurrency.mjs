@@ -122,7 +122,7 @@ const customerB = await runWithTenant(ORG_B, () => {
   });
 });
 
-check(getSchemaVersion() === 1, `Repository schema version recorded (${getSchemaVersion()})`);
+check(getSchemaVersion() === 4, `Repository schema version recorded (${getSchemaVersion()})`);
 const parentSnapshot = readSnapshotDirect('udm');
 check(parentSnapshot !== null, 'Durable SQLite snapshot exists before concurrent workers');
 check(parentSnapshot?.customers?.length === 2, 'Both seeded customers are in the parent snapshot');
@@ -337,14 +337,13 @@ const legacyWrite = await runWorker('idempotent-invoice', workerEnv(ORG_A, {
 }));
 check(legacyWrite.code === 0 && legacyWrite.result?.ok,
   'Legacy snapshot accepts a new financial write after migration');
-const legacyCheckDb = new DatabaseSync(legacyPath);
-const migratedRow = legacyCheckDb
-  .prepare('SELECT payload FROM repository_snapshots WHERE namespace = ?')
-  .get('udm');
-legacyCheckDb.close();
-const migratedState = migratedRow?.payload ? JSON.parse(migratedRow.payload) : null;
-check(migratedState?.customers?.length === 1 && migratedState?.invoices?.length === 1,
-  'Upgraded snapshot retained the legacy customer and added the invoice');
+const migratedRead = await runWorker('read-counts', workerEnv(ORG_A, { AIOSPARK_DB_PATH: legacyPath }));
+check(
+  migratedRead.code === 0 &&
+    migratedRead.result?.counts?.customers === 1 &&
+    migratedRead.result?.counts?.invoices === 1,
+  'Upgraded relational state retained the legacy customer and added the invoice'
+);
 for (const suffix of ['', '-wal', '-shm']) {
   try { fs.unlinkSync(`${legacyPath}${suffix}`); } catch { /* absent */ }
 }

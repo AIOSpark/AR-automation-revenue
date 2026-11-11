@@ -1,5 +1,14 @@
 // AIOSpark User & Organization Persistence Layer (Layer 2)
-import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
+import { isInWriteTransaction, withWriteTransaction } from '../db/durable-repository';
+import {
+  backfillOperationalFromSnapshots,
+  clearAuthState,
+  insertAuthOrganization,
+  insertAuthUser,
+  readAuthState,
+  updateAuthOrganization,
+  updateAuthUser,
+} from '../db/operational-repository';
 
 export interface UserRecord {
   id: string;
@@ -35,19 +44,31 @@ class AuthStore {
   private platformAdmins: Set<string> = new Set(); // Keyed by user ID
 
   constructor() {
-    const state = readSnapshot<{ users: UserRecord[]; organizations: OrganizationRecord[] }>('auth');
-    for (const user of state?.users || []) {
-      this.users.set(user.id, user);
-      this.authProviderToUserId.set(user.auth_provider_id, user.id);
-      this.emailToUserId.set(user.email.toLowerCase(), user.id);
-    }
-    for (const organization of state?.organizations || []) this.organizations.set(organization.id, organization);
+    backfillOperationalFromSnapshots();
+    this.reloadFromDurableState();
   }
 
+  private reloadFromDurableState(): void {
+    backfillOperationalFromSnapshots();
+    const state = readAuthState();
+    this.users = new Map((state.users as UserRecord[]).map((user) => [user.id, user]));
+    this.authProviderToUserId = new Map((state.users as UserRecord[]).map((user) => [user.auth_provider_id, user.id]));
+    this.emailToUserId = new Map((state.users as UserRecord[]).map((user) => [user.email.toLowerCase(), user.id]));
+    this.organizations = new Map((state.organizations as OrganizationRecord[]).map((org) => [org.id, org]));
+  }
+
+  private refreshForRead(): void {
+    if (!isInWriteTransaction()) this.reloadFromDurableState();
+  }
+
+  /**
+   * Persist fields mutated directly by callers (for example pilotMode). Each
+   * row is updated in place so concurrent inserts are not deleted.
+   */
   public persistState(): void {
-    writeSnapshot('auth', {
-      users: Array.from(this.users.values()),
-      organizations: Array.from(this.organizations.values()),
+    withWriteTransaction(() => {
+      for (const user of this.users.values()) updateAuthUser(user);
+      for (const organization of this.organizations.values()) updateAuthOrganization(organization);
     });
   }
 
@@ -61,63 +82,75 @@ class AuthStore {
     email_verified?: boolean;
   }): UserRecord {
     const emailKey = data.email.toLowerCase();
-    
-    if (this.emailToUserId.has(emailKey)) {
-      const existingId = this.emailToUserId.get(emailKey)!;
-      return this.users.get(existingId)!;
-    }
+    return withWriteTransaction(() => {
+      this.reloadFromDurableState();
 
-    const id = `usr_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
-    const now = new Date().toISOString();
+      if (this.emailToUserId.has(emailKey)) {
+        const existingId = this.emailToUserId.get(emailKey)!;
+        return this.users.get(existingId)!;
+      }
 
-    const user: UserRecord = {
-      id,
-      auth_provider_id: data.auth_provider_id,
-      email: data.email,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      phone: data.phone || null,
-      role_title: data.role_title || null,
-      email_verified: data.email_verified ?? false,
-      created_at: now,
-      updated_at: now,
-    };
+      const id = `usr_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+      const now = new Date().toISOString();
 
-    this.users.set(id, user);
-    this.authProviderToUserId.set(data.auth_provider_id, id);
-    this.emailToUserId.set(emailKey, id);
-    this.persistState();
+      const user: UserRecord = {
+        id,
+        auth_provider_id: data.auth_provider_id,
+        email: data.email,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        phone: data.phone || null,
+        role_title: data.role_title || null,
+        email_verified: data.email_verified ?? false,
+        created_at: now,
+        updated_at: now,
+      };
 
-    return user;
+      if (!insertAuthUser(user)) {
+        this.reloadFromDurableState();
+        return this.getUserByEmail(data.email)!;
+      }
+      this.users.set(id, user);
+      this.authProviderToUserId.set(data.auth_provider_id, id);
+      this.emailToUserId.set(emailKey, id);
+      return user;
+    });
   }
 
   public getUserByEmail(email: string): UserRecord | null {
+    this.refreshForRead();
     const id = this.emailToUserId.get(email.toLowerCase());
     return id ? this.users.get(id) || null : null;
   }
 
   public getUserByAuthProviderId(authProviderId: string): UserRecord | null {
+    this.refreshForRead();
     const id = this.authProviderToUserId.get(authProviderId);
     return id ? this.users.get(id) || null : null;
   }
 
   public getUserById(id: string): UserRecord | null {
+    this.refreshForRead();
     return this.users.get(id) || null;
   }
 
   public getOrganizationById(id: string): OrganizationRecord | null {
+    this.refreshForRead();
     return this.organizations.get(id) || null;
   }
 
   public updateUserEmailVerified(authProviderId: string, verified: boolean): UserRecord | null {
-    const user = this.getUserByAuthProviderId(authProviderId);
-    if (user) {
-      user.email_verified = verified;
-      user.updated_at = new Date().toISOString();
-      this.persistState();
-      return user;
-    }
-    return null;
+    return withWriteTransaction(() => {
+      this.reloadFromDurableState();
+      const user = this.getUserByAuthProviderId(authProviderId);
+      if (user) {
+        user.email_verified = verified;
+        user.updated_at = new Date().toISOString();
+        updateAuthUser(user);
+        return user;
+      }
+      return null;
+    });
   }
 
   public createOrganizationDraft(data: {
@@ -126,25 +159,29 @@ class AuthStore {
     industry: string;
     created_by_user_id: string;
   }): OrganizationRecord {
-    const id = `org_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
-    const now = new Date().toISOString();
+    return withWriteTransaction(() => {
+      this.reloadFromDurableState();
+      const id = `org_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+      const now = new Date().toISOString();
 
-    const org: OrganizationRecord = {
-      id,
-      name: data.name,
-      size: data.size,
-      industry: data.industry,
-      created_by_user_id: data.created_by_user_id,
-      created_at: now,
-      updated_at: now,
-    };
+      const org: OrganizationRecord = {
+        id,
+        name: data.name,
+        size: data.size,
+        industry: data.industry,
+        created_by_user_id: data.created_by_user_id,
+        created_at: now,
+        updated_at: now,
+      };
 
-    this.organizations.set(id, org);
-    this.persistState();
-    return org;
+      insertAuthOrganization(org);
+      this.organizations.set(id, org);
+      return org;
+    });
   }
 
   public getOrganizationByUserId(userId: string): OrganizationRecord | null {
+    this.refreshForRead();
     for (const org of this.organizations.values()) {
       if (org.created_by_user_id === userId) {
         return org;
@@ -166,11 +203,13 @@ class AuthStore {
   }
 
   public clearAll(): void {
-    this.users.clear();
-    this.authProviderToUserId.clear();
-    this.emailToUserId.clear();
-    this.organizations.clear();
-    deleteSnapshot('auth');
+    withWriteTransaction(() => {
+      clearAuthState();
+      this.users.clear();
+      this.authProviderToUserId.clear();
+      this.emailToUserId.clear();
+      this.organizations.clear();
+    });
   }
 }
 

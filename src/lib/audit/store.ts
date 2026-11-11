@@ -1,6 +1,12 @@
 // AIOSpark Audit System Store & Types (Layer 26)
 // Provides a canonical, provably immutable append-only audit trail with RLS and trigger enforcement.
-import { deleteSnapshot, getDurableStatePath, isInWriteTransaction, readSnapshot, withWriteTransaction, writeSnapshot } from '../db/durable-repository';
+import { isInWriteTransaction, withWriteTransaction } from '../db/durable-repository';
+import {
+  appendAuditEvent,
+  backfillGovernanceFromSnapshots,
+  purgeAuditEvents,
+  readAuditEvents,
+} from '../db/governance-repository';
 
 export type ActorType = 'user' | 'agent' | 'system';
 
@@ -56,6 +62,7 @@ class AuditStore {
   private auditLogProxy: AuditLogRecord[];
 
   constructor() {
+    backfillGovernanceFromSnapshots();
     this.reloadFromDurableState();
     // Database-level immutability enforcement simulation:
     // Uses ES6 Proxy to intercept and REJECT any attempt to mutate, update, reassign or delete array elements or properties.
@@ -82,8 +89,8 @@ class AuditStore {
   }
 
   private reloadFromDurableState(): void {
-    if (getDurableStatePath() === ':memory:') return;
-    const persisted = readSnapshot<AuditLogRecord[]>('audit') || [];
+    backfillGovernanceFromSnapshots();
+    const persisted = readAuditEvents() as AuditLogRecord[];
     this.rawStore.internalLogs.length = 0;
     this.rawStore.internalLogs.push(...persisted);
   }
@@ -121,7 +128,7 @@ class AuditStore {
       const previousLength = this.rawStore.internalLogs.length;
       this.rawStore.internalLogs.push(record);
       try {
-        writeSnapshot('audit', this.rawStore.internalLogs);
+        appendAuditEvent(record);
       } catch (error) {
         this.rawStore.internalLogs.length = previousLength;
         throw error;
@@ -235,8 +242,8 @@ class AuditStore {
   }
 
   public clearAll(): void {
+    purgeAuditEvents();
     this.rawStore.internalLogs.length = 0;
-    deleteSnapshot('audit');
   }
 }
 

@@ -1,6 +1,24 @@
 // AIOSpark Usage Tracking & Plan Definition Store (Layer 27)
-import { deleteSnapshot, getDurableStatePath, isInWriteTransaction, readSnapshot, withWriteTransaction, writeSnapshot } from '../db/durable-repository';
+import { isInWriteTransaction, withWriteTransaction } from '../db/durable-repository';
 import { AuditService } from '../audit/service';
+import {
+  backfillGovernanceFromSnapshots,
+  clearBillingSubscriptions,
+  insertBillingSubscription,
+  insertBillingSubscriptionHistory,
+  readBillingSubscriptions,
+  updateBillingSubscription,
+} from '../db/governance-repository';
+import {
+  backfillOperationalFromSnapshots,
+  clearBillingOperationalState,
+  insertBillingPayment,
+  insertBillingRefundEvent,
+  insertBillingUsageEvent,
+  insertBillingWebhookEvent,
+  readBillingOperationalState,
+  updateBillingWebhookStatus,
+} from '../db/operational-repository';
 
 export type UsageEventType =
   | 'invoice.processed'
@@ -264,17 +282,22 @@ class UsageAndBillingStore {
   private refundEvents: Map<string, RefundEvent> = new Map(); // Keyed by provider_refund_id
 
   constructor() {
+    backfillOperationalFromSnapshots();
+    backfillGovernanceFromSnapshots();
     this.reloadFromDurableState();
   }
 
   private reloadFromDurableState(): void {
-    if (getDurableStatePath() === ':memory:') return;
-    const state = readSnapshot<{ events: UsageEvent[]; subscriptions: OrganizationSubscription[]; payments: Payment[]; webhookEvents: WebhookEvent[]; refundEvents: RefundEvent[] }>('billing');
-    this.events = state?.events || [];
-    this.subscriptions = new Map((state?.subscriptions || []).map((subscription) => [subscription.organization_id, subscription]));
-    this.payments = new Map((state?.payments || []).map((payment) => [payment.id, payment]));
-    this.webhookEvents = new Map((state?.webhookEvents || []).map((event) => [event.provider_event_id, event]));
-    this.refundEvents = new Map((state?.refundEvents || []).map((refund) => [refund.provider_refund_id, refund]));
+    backfillOperationalFromSnapshots();
+    backfillGovernanceFromSnapshots();
+    const state = readBillingOperationalState();
+    this.events = state.events as UsageEvent[];
+    this.subscriptions = new Map(
+      readBillingSubscriptions().map((subscription) => [subscription.organization_id, subscription as OrganizationSubscription]),
+    );
+    this.payments = new Map((state.payments as Payment[]).map((payment) => [payment.id, payment]));
+    this.webhookEvents = new Map((state.webhookEvents as WebhookEvent[]).map((event) => [event.provider_event_id, event]));
+    this.refundEvents = new Map((state.refundEvents as RefundEvent[]).map((refund) => [refund.provider_refund_id, refund]));
   }
 
   private refreshForRead(): void {
@@ -293,10 +316,6 @@ class UsageAndBillingStore {
     }
   }
 
-  private persist(): void {
-    writeSnapshot('billing', { events: this.events, subscriptions: Array.from(this.subscriptions.values()), payments: Array.from(this.payments.values()), webhookEvents: Array.from(this.webhookEvents.values()), refundEvents: Array.from(this.refundEvents.values()) });
-  }
-
   // --- USAGE TRACKING ---
   public recordEvent(params: {
     organization_id: string;
@@ -304,20 +323,20 @@ class UsageAndBillingStore {
     quantity?: number;
     metadata?: Record<string, any> | null;
   }): UsageEvent {
-    return this.runMutation(() => {
-    const id = `use_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const event: UsageEvent = {
-      id,
-      organization_id: params.organization_id,
-      event_type: params.event_type,
-      quantity: params.quantity ?? 1,
-      metadata: params.metadata ?? null,
-      occurred_at: new Date().toISOString(),
-    };
+    return withWriteTransaction(() => {
+      const id = `use_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const event: UsageEvent = {
+        id,
+        organization_id: params.organization_id,
+        event_type: params.event_type,
+        quantity: params.quantity ?? 1,
+        metadata: params.metadata ?? null,
+        occurred_at: new Date().toISOString(),
+      };
 
-    this.events.push(event);
-    this.persist();
-    return event;
+      insertBillingUsageEvent(event);
+      this.events.push(event);
+      return event;
     });
   }
 
@@ -403,9 +422,15 @@ class UsageAndBillingStore {
       version: 0,
     };
 
-    this.subscriptions.set(orgId, defaultSub);
-    this.persist();
-    return defaultSub;
+    const alreadyExists = readBillingSubscriptions().find((row) => row.organization_id === orgId);
+    if (!alreadyExists) {
+      insertBillingSubscription(defaultSub);
+      insertBillingSubscriptionHistory(defaultSub);
+      this.subscriptions.set(orgId, defaultSub);
+    } else {
+      this.subscriptions.set(orgId, alreadyExists as OrganizationSubscription);
+    }
+    return this.subscriptions.get(orgId) || defaultSub;
   }
 
   public getAllSubscriptions(): Map<string, OrganizationSubscription> {
@@ -437,7 +462,10 @@ class UsageAndBillingStore {
         updated_at: new Date().toISOString(),
       };
       this.subscriptions.set(orgId, updated);
-      this.persist();
+      if (!updateBillingSubscription(updated, currentVersion)) {
+        throw new BillingConflictError(orgId);
+      }
+      insertBillingSubscriptionHistory(updated);
       AuditService.record({
         organization_id: orgId,
         actor_type: 'system',
@@ -476,13 +504,13 @@ class UsageAndBillingStore {
   // --- PAYMENTS ---
 
   public recordPayment(payment: Payment): Payment {
-    return this.runMutation(() => {
-    const id = payment.id || `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const now = new Date().toISOString();
-    const record: Payment = { ...payment, id, created_at: now, updated_at: now };
-    this.payments.set(id, record);
-    this.persist();
-    return record;
+    return withWriteTransaction(() => {
+      const id = payment.id || `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const now = new Date().toISOString();
+      const record: Payment = { ...payment, id, created_at: now, updated_at: now };
+      insertBillingPayment(record);
+      this.payments.set(id, record);
+      return record;
     });
   }
 
@@ -496,26 +524,29 @@ class UsageAndBillingStore {
   }
 
   public getPayment(paymentId: string): Payment | null {
+    this.refreshForRead();
     return this.payments.get(paymentId) || null;
   }
 
   // --- WEBHOOK EVENTS ---
 
   public getWebhookEvent(providerEventId: string): WebhookEvent | null {
+    this.refreshForRead();
     return this.webhookEvents.get(providerEventId) || null;
   }
 
   public updateWebhookEventStatus(providerEventId: string, status: WebhookEvent['status']): void {
-    this.runMutation(() => {
+    withWriteTransaction(() => {
       const existing = this.webhookEvents.get(providerEventId);
       if (!existing) return;
       const updated: WebhookEvent = { ...existing, status, updated_at: new Date().toISOString() };
+      updateBillingWebhookStatus(providerEventId, status, updated.updated_at);
       this.webhookEvents.set(providerEventId, updated);
-      this.persist();
     });
   }
 
   public getAbandonedProcessingEvents(maxAgeMinutes: number): WebhookEvent[] {
+    this.refreshForRead();
     const cutoff = Date.now() - maxAgeMinutes * 60 * 1000;
     return Array.from(this.webhookEvents.values()).filter(
       (e) => e.status === 'PROCESSING' && new Date(e.updated_at).getTime() < cutoff,
@@ -523,12 +554,14 @@ class UsageAndBillingStore {
   }
 
   public getRetryableFailedEvents(): WebhookEvent[] {
+    this.refreshForRead();
     return Array.from(this.webhookEvents.values()).filter(
       (e) => e.status === 'FAILED' && e.retry_count < e.max_retries,
     );
   }
 
   public getUnresolvedWebhookEvents(): WebhookEvent[] {
+    this.refreshForRead();
     return Array.from(this.webhookEvents.values()).filter(
       (e) => e.status !== 'PROCESSED',
     );
@@ -537,28 +570,29 @@ class UsageAndBillingStore {
   // --- REFUND EVENTS ---
 
   public recordRefundEvent(refund: Omit<RefundEvent, 'id' | 'created_at' | 'updated_at'>): RefundEvent {
-    return this.runMutation(() => {
-    const id = `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const now = new Date().toISOString();
-    const record: RefundEvent = { ...refund, id, created_at: now, updated_at: now };
-    this.refundEvents.set(id, record);
-    this.persist();
-    return record;
+    return withWriteTransaction(() => {
+      const id = `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const now = new Date().toISOString();
+      const record: RefundEvent = { ...refund, id, created_at: now, updated_at: now };
+      insertBillingRefundEvent(record);
+      this.refundEvents.set(id, record);
+      return record;
     });
   }
 
   public getRefundEvent(providerRefundId: string): RefundEvent | null {
+    this.refreshForRead();
     return this.refundEvents.get(providerRefundId) || null;
   }
 
-  public persistSnapshot(): void {
-    this.persist();
-  }
+  /** All writes are already durable; retained for the existing API. */
+  public persistSnapshot(): void {}
 
   public clearAll(): void {
     this.events = [];
     this.subscriptions.clear();
-    deleteSnapshot('billing');
+    clearBillingOperationalState();
+    clearBillingSubscriptions();
   }
 }
 
