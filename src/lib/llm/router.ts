@@ -2,7 +2,7 @@
 // Centralized model routing with primary/fallback selection, retry logic,
 // and timeout handling.
 // Server-only: API keys and provider configuration must never reach client bundles.
-import './server-only';
+import 'server-only';
 
 import {
   LLMMessage,

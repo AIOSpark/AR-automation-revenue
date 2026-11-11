@@ -166,7 +166,15 @@ This register contains issues discovered during the independent current-state as
 | Dependencies | `src/lib/llm/*`, `scripts/test-master.mjs`, `scripts/test-security.mjs` |
 | Acceptance Criteria | `npm run test:master` and `npm run test:security` execute to completion without `server-only` errors. |
 | Verification | Re-run master and security suites; report pass/fail counts. |
-| Status | Confirmed |
+| Status | **CLOSED — 2026-11-11** |
+
+**Closure evidence**
+
+- Restored `import 'server-only';` in `src/lib/llm/provider.ts`, `openai-adapter.ts`, and `router.ts`; deleted the empty `src/lib/llm/server-only.ts` shim.
+- Added a test-only Node resolution hook (`scripts/test-only-server-modules.mjs` + `scripts/test-server-only-stub.mjs`) loaded via `node --import` by the test scripts. Production code and `next build` still resolve the real marker package, preserving Next.js build-time enforcement.
+- Extended `scripts/security-scan.mjs` (runs in `test:scan` / `verify`) with a client import-graph check that fails if any `"use client"` entry point reaches a server-only module or a local server-only shim. Negative test: an injected client import of `@/lib/llm/router` was detected and failed the scan (exit 1); the probe was then removed.
+- Changed `typecheck` to `next typegen && tsc --noEmit` to eliminate dependence on stale `.next/types` artifacts.
+- Verification: clean typecheck (after removing `.next` and `tsconfig.tsbuildinfo`) pass; production build pass; `npm run verify` pass; master 187/187, security 12/12, financial 54/54, auth 39/39, tenant 8/8, financial stress pass, durability 27+28 reader pass, pilot security 28+2 reader pass, lint pass. Full logs: `docs/audits/AIOSPARK_HIGH-008_VERIFICATION_2026-11-11.md`.
 
 ---
 
