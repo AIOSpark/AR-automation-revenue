@@ -51,6 +51,7 @@ type UDMState = {
     record_id: string | null;
     fingerprint: string;
     response: unknown;
+    status: 'reserved' | 'committed' | 'failed';
   }>;
 };
 
@@ -72,7 +73,7 @@ class UniversalDataStore {
   private _suppressNotifications = false;
   private _pendingNotifications: Set<string> = new Set();
   private _transactionLock: Promise<unknown> = Promise.resolve(); // Serializes in-process transactions
-  private apiIdempotencyKeys: Map<string, { recordId: string | null; fingerprint: string; response: unknown }> = new Map(); // Keyed by orgId:endpoint:key
+  private apiIdempotencyKeys: Map<string, { recordId: string | null; fingerprint: string; response: unknown; status: 'reserved' | 'committed' | 'failed' }> = new Map(); // Keyed by orgId:endpoint:key
   private lastPersistedState: UDMState | null = null;
   private dirtyInvoices: Set<string> = new Set();
   private forceFullProjection = false;
@@ -160,7 +161,7 @@ class UniversalDataStore {
     this.idempotencyKeys = new Map((state.idempotencyKeys || []).map((entry) => [`${entry.organization_id}:${entry.key}`, entry.record_id]));
     this.apiIdempotencyKeys = new Map((state.apiIdempotencyKeys || []).map((entry) => [
       `${entry.organization_id}:${entry.endpoint}:${entry.key}`,
-      { recordId: entry.record_id, fingerprint: entry.fingerprint, response: entry.response },
+      { recordId: entry.record_id, fingerprint: entry.fingerprint, response: entry.response, status: entry.status || 'reserved' },
     ]));
   }
 
@@ -194,6 +195,7 @@ class UniversalDataStore {
           record_id: value.recordId,
           fingerprint: value.fingerprint,
           response: value.response,
+          status: value.status,
         };
       }),
     };
@@ -269,6 +271,7 @@ class UniversalDataStore {
    *
    * Returns:
    *   { status: 'available', recordId: null } — key not seen before, reserved for this request
+   *   { status: 'recoverable', recordId: null } — key reserved but operation never completed (crash recovery)
    *   { status: 'replay', recordId, response } — same key + same fingerprint, return cached response
    *   { status: 'conflict', recordId } — same key + different fingerprint (HTTP 409)
    */
@@ -277,21 +280,33 @@ class UniversalDataStore {
     endpoint: string,
     key: string,
     fingerprint: string
-  ): Promise<{ status: 'available' | 'replay' | 'conflict'; recordId: string | null; response: unknown | null }> {
-    return this.withIdempotencyLock<{ status: 'available' | 'replay' | 'conflict'; recordId: string | null; response: unknown | null }>(orgId, key, () => {
+  ): Promise<{ status: 'available' | 'recoverable' | 'replay' | 'conflict'; recordId: string | null; response: unknown | null }> {
+    return this.withIdempotencyLock<{ status: 'available' | 'recoverable' | 'replay' | 'conflict'; recordId: string | null; response: unknown | null }>(orgId, key, () => {
       return this.runWrite(() => {
         const lockKey = `${orgId}:${endpoint}:${key}`;
         const existing = this.apiIdempotencyKeys.get(lockKey);
         if (!existing) {
           // Reserve the key as pending (no response yet) to prevent concurrent duplicates
-          this.apiIdempotencyKeys.set(lockKey, { recordId: null, fingerprint, response: null });
+          this.apiIdempotencyKeys.set(lockKey, { recordId: null, fingerprint, response: null, status: 'reserved' });
           this.persist();
           return { status: 'available' as const, recordId: null, response: null };
         }
-        if (existing.fingerprint !== fingerprint) {
-          return { status: 'conflict' as const, recordId: existing.recordId, response: null };
+        if (existing.status === 'reserved') {
+          // Previous attempt reserved the key but never finalized — possible crash.
+          // Return 'recoverable' so the caller can retry. The caller must verify
+          // whether the financial transaction actually completed before retrying.
+          return { status: 'recoverable' as const, recordId: null, response: null };
         }
-        return { status: 'replay' as const, recordId: existing.recordId, response: existing.response };
+        if (existing.status === 'committed') {
+          if (existing.fingerprint !== fingerprint) {
+            return { status: 'conflict' as const, recordId: existing.recordId, response: null };
+          }
+          return { status: 'replay' as const, recordId: existing.recordId, response: existing.response };
+        }
+        // existing.status === 'failed' — treat as available for retry
+        this.apiIdempotencyKeys.set(lockKey, { recordId: null, fingerprint, response: null, status: 'reserved' });
+        this.persist();
+        return { status: 'available' as const, recordId: null, response: null };
       });
     });
   }
@@ -310,7 +325,7 @@ class UniversalDataStore {
   ): void {
     this.runWrite(() => {
       const lockKey = `${orgId}:${endpoint}:${key}`;
-      this.apiIdempotencyKeys.set(lockKey, { recordId, fingerprint, response });
+      this.apiIdempotencyKeys.set(lockKey, { recordId, fingerprint, response, status: 'committed' });
       this.persist();
     });
   }
@@ -321,7 +336,7 @@ class UniversalDataStore {
   public releaseApiIdempotency(orgId: string, endpoint: string, key: string): void {
     this.runWrite(() => {
       const lockKey = `${orgId}:${endpoint}:${key}`;
-      this.apiIdempotencyKeys.delete(lockKey);
+      this.apiIdempotencyKeys.set(lockKey, { recordId: null, fingerprint: '', response: null, status: 'failed' });
       this.persist();
     });
   }

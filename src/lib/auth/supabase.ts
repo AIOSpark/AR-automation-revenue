@@ -4,14 +4,14 @@ import { createClient } from "@supabase/supabase-js";
 import { AUTH_CONFIG } from "./config";
 import { authStore, UserRecord, OrganizationRecord } from "./store";
 import { trackAuthFunnelEvent } from "./analytics";
-import { createSessionToken } from "./session";
+import { createSessionToken, verifySessionToken } from "./session";
 import { isAuthProviderConfigured, isDevAuthEnabled } from "./dev-mode";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+// Prefer publishable key (modern Supabase); fall back to legacy anon key
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
 export interface SignupInput {
   first_name: string;
   last_name: string;
@@ -41,7 +41,7 @@ export async function executeSignup(input: SignupInput): Promise<AuthResult> {
   if (!providerConfigured && !isDevAuthEnabled()) {
     return { success: false, error: "Authentication provider is not configured" };
   }
-  
+
   trackAuthFunnelEvent("signup_started", { email, companyName: input.company_name });
 
   // Check if user already exists in database
@@ -94,6 +94,9 @@ export async function executeSignup(input: SignupInput): Promise<AuthResult> {
     email_verified: emailVerified,
   });
 
+  // Never issue an application session for an unconfirmed email.
+  const sessionToken = emailVerified ? (createSessionToken(dbUser.id) || undefined) : undefined;
+
   // Create Organization Draft capture point
   const dbOrg = authStore.createOrganizationDraft({
     name: input.company_name,
@@ -117,7 +120,7 @@ export async function executeSignup(input: SignupInput): Promise<AuthResult> {
     success: true,
     user: dbUser,
     organization: dbOrg,
-    sessionToken: createSessionToken(dbUser.id) || undefined,
+    sessionToken,
     requiresEmailVerification: !dbUser.email_verified,
   };
 }
@@ -246,4 +249,84 @@ export async function confirmEmailVerification(emailInput: string): Promise<{ su
   });
 
   return { success: true, user };
+}
+
+// 5. Authenticated User Mapping: Supabase Auth Identity → AIOSpark User Profile
+export interface SupabaseUserProfile {
+  id: string;
+  email: string;
+  email_confirmed_at: string | null;
+  user_metadata: Record<string, unknown>;
+}
+
+/**
+ * Resolves the authenticated Supabase Auth user to an AIOSpark user profile.
+ * Never trusts browser-supplied user IDs; uses the server-side session token
+ * to resolve the Supabase Auth user ID (auth_provider_id), then creates or
+ * retrieves the matching AIOSpark UserRecord.
+ * Fails closed (returns null) when no authenticated context exists.
+ */
+export async function getOrCreateUserFromSupabaseId(
+  supabaseUserId: string,
+  email: string,
+  firstName: string = "",
+  lastName: string = ""
+): Promise<UserRecord | null> {
+  if (!supabaseUserId || !email) {
+    return null;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // Try to find existing user by Supabase Auth ID first
+  let user = authStore.getUserByAuthProviderId(supabaseUserId);
+  if (user) {
+    return user;
+  }
+
+  // Fall back to email lookup (handles retry / duplicate signup scenarios)
+  user = authStore.getUserByEmail(normalizedEmail);
+  if (user) {
+    // Link the Supabase Auth ID to the existing profile if not already linked
+    if (user.auth_provider_id !== supabaseUserId) {
+      user.auth_provider_id = supabaseUserId;
+      authStore.updateUserEmailVerified(user.auth_provider_id, user.email_verified);
+    }
+    return user;
+  }
+
+  // Create new AIOSpark user profile linked to the Supabase Auth identity
+  return authStore.createUser({
+    auth_provider_id: supabaseUserId,
+    email: normalizedEmail,
+    first_name: firstName,
+    last_name: lastName,
+    email_verified: false,
+  });
+}
+
+/**
+ * Resolves the authenticated user from a server-side request using the
+ * application's session token. Maps the session to a Supabase Auth identity
+ * (auth_provider_id) and then to an AIOSpark user profile.
+ * Fails closed (returns null) when no valid session exists.
+ */
+export async function resolveAuthenticatedUser(
+  sessionToken: string | undefined
+): Promise<{ user: UserRecord | null; isEmailVerified: boolean }> {
+  if (!sessionToken) {
+    return { user: null, isEmailVerified: false };
+  }
+
+  const userId = verifySessionToken(sessionToken);
+  if (!userId) {
+    return { user: null, isEmailVerified: false };
+  }
+
+  const user = authStore.getUserById(userId);
+  if (!user) {
+    return { user: null, isEmailVerified: false };
+  }
+
+  return { user, isEmailVerified: Boolean(user.email_verified) };
 }

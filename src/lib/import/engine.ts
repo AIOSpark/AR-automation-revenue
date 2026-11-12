@@ -157,6 +157,16 @@ class ImportPipelineEngine {
     successCount: number;
     skippedCount: number;
   } {
+    return withWriteTransaction(() => {
+      return this.processBatchInternal(batchId, config);
+    });
+  }
+
+  private processBatchInternal(batchId: string, config: ImportPipelineConfig): {
+    summary: string;
+    successCount: number;
+    skippedCount: number;
+  } {
     const batch = this.batches.get(batchId);
     if (!batch) throw new Error(`Batch not found: ${batchId}`);
 

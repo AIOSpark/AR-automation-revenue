@@ -20,7 +20,9 @@ const PROHIBITED_PILOT_ACTIONS = new Set([
   "CUSTOMER_RECORD_MUTATION",
 ]);
 
-// Actions allowed during pilot mode (read-only or internal simulation only).
+// Actions allowed during pilot mode. DATA_INGESTION is a controlled, authorized
+// ingestion of existing customer and invoice data — it creates database records
+// but is not a financial execution, payment mutation, or external writeback.
 const ALLOWED_PILOT_ACTIONS = new Set([
   "VIEW_QUEUE",
   "VIEW_DATA",
@@ -28,6 +30,7 @@ const ALLOWED_PILOT_ACTIONS = new Set([
   "SCENARIO_SIMULATION",
   "HUMAN_REVIEW",
   "AUDIT_RECORD",
+  "DATA_INGESTION",
 ]);
 
 export function isPilotOrganization(orgId: string): boolean {
@@ -53,9 +56,12 @@ export function isPilotAllowedAction(action: string): boolean {
 }
 
 /**
- * Middleware helper: enforces read-only pilot mode on mutation endpoints.
+ * Middleware helper: enforces pilot mode restrictions on mutation endpoints.
  * Returns a NextResponse error if the organization is in pilot mode and the
  * requested action is prohibited. Returns null if the request is allowed.
+ * DATA_INGESTION is permitted as a controlled onboarding operation even though
+ * it creates database records; PAYMENT_INITIATION, CUSTOMER_RECORD_MUTATION,
+ * and other financial execution actions remain prohibited.
  */
 export function validatePilotReadOnly(
   orgId: string | undefined,

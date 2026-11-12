@@ -243,7 +243,7 @@ export async function runFinancialRbacSuite(): Promise<SuiteResult> {
       method: 'POST',
       body: { rows: [] },
     }));
-    assert.equal(importRes.status, 403);
+    assert.equal(importRes.status, 410);
 
     const copilotRes = await copilotActionPOST(request(users.Viewer.id, orgA.id, '/api/copilot/action', {
       method: 'POST',

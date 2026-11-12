@@ -28,6 +28,7 @@ export type RelationalUdmState = {
     record_id: string | null;
     fingerprint: string;
     response: unknown;
+    status: 'reserved' | 'committed' | 'failed';
   }>;
 };
 
@@ -289,8 +290,8 @@ function insertIdempotency(
 
   const apiStatement = db.prepare(`
     INSERT INTO udm_api_idempotency_keys(
-      organization_id, endpoint, key, record_id, fingerprint, response
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      organization_id, endpoint, key, record_id, fingerprint, response, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   for (const entry of state.apiIdempotencyKeys || []) {
     apiStatement.run(
@@ -300,6 +301,7 @@ function insertIdempotency(
       entry.record_id,
       entry.fingerprint,
       JSON.stringify(entry.response ?? null),
+      entry.status,
     );
   }
 }
@@ -563,12 +565,13 @@ export function writeUdmRelationalDelta(
 
     const apiStatement = db.prepare(`
       INSERT INTO udm_api_idempotency_keys(
-        organization_id, endpoint, key, record_id, fingerprint, response
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        organization_id, endpoint, key, record_id, fingerprint, response, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(organization_id, endpoint, key) DO UPDATE SET
         record_id = excluded.record_id,
         fingerprint = excluded.fingerprint,
-        response = excluded.response
+        response = excluded.response,
+        status = excluded.status
     `);
     for (const entry of state.apiIdempotencyKeys || []) {
       apiStatement.run(
@@ -578,6 +581,7 @@ export function writeUdmRelationalDelta(
         entry.record_id,
         entry.fingerprint,
         JSON.stringify(entry.response ?? null),
+        entry.status,
       );
     }
   });
@@ -619,7 +623,7 @@ export function readUdmRelationalState(): RelationalUdmState | null {
   const apiIdempotencyKeys = (
     db
       .prepare(
-        'SELECT organization_id, endpoint, key, record_id, fingerprint, response FROM udm_api_idempotency_keys',
+        'SELECT organization_id, endpoint, key, record_id, fingerprint, response, status FROM udm_api_idempotency_keys',
       )
       .all() as Array<{
       organization_id: string;
@@ -628,6 +632,7 @@ export function readUdmRelationalState(): RelationalUdmState | null {
       record_id: string | null;
       fingerprint: string;
       response: string | null;
+      status: string;
     }>
   ).map((row) => ({
     organization_id: row.organization_id,
@@ -636,6 +641,7 @@ export function readUdmRelationalState(): RelationalUdmState | null {
     record_id: row.record_id,
     fingerprint: row.fingerprint,
     response: row.response ? JSON.parse(row.response) : null,
+    status: (row.status as 'reserved' | 'committed' | 'failed') || 'reserved',
   }));
 
   return {

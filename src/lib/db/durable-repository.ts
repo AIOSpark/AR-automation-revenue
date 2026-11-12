@@ -9,6 +9,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { RELATIONAL_SCHEMA_SQL, RELATIONAL_SCHEMA_VERSION } from './relational-schema';
 import { GOVERNANCE_SCHEMA_SQL, GOVERNANCE_SCHEMA_VERSION } from './governance-schema';
 import { OPERATIONAL_SCHEMA_SQL, OPERATIONAL_SCHEMA_VERSION } from './operational-schema';
@@ -71,11 +72,72 @@ database.prepare(
 ).run(OPERATIONAL_SCHEMA_VERSION, new Date().toISOString());
 
 /**
- * Depth of the current process's explicit SQLite write transaction. SQLite
- * write transactions are connection-scoped, so nested store calls must share
- * the outer transaction rather than issuing a second BEGIN.
+ * Async-local storage for write transaction depth. SQLite write transactions
+ * are connection-scoped, so nested store calls must share the outer
+ * transaction rather than issuing a second BEGIN. Each async context gets
+ * its own depth counter, preventing concurrent requests from corrupting
+ * each other's transactions.
  */
-let writeTransactionDepth = 0;
+const txDepthStorage = new AsyncLocalStorage<Map<string, number>>();
+
+function getTxDepth(): number {
+  const store = txDepthStorage.getStore();
+  return store ? (store.get('depth') ?? 0) : 0;
+}
+
+function setTxDepth(depth: number): void {
+  const store = txDepthStorage.getStore();
+  if (store) {
+    store.set('depth', depth);
+  }
+}
+
+function runWithTxDepth<T>(depth: number, callback: () => T): T {
+  const store = new Map<string, number>([['depth', depth]]);
+  return txDepthStorage.run(store, callback);
+}
+
+export function withWriteTransaction<T>(callback: () => T): T {
+  const currentDepth = getTxDepth();
+
+  if (currentDepth > 0) {
+    // Nested call within the same async context: join the outer transaction.
+    setTxDepth(currentDepth + 1);
+    try {
+      return callback();
+    } finally {
+      setTxDepth(currentDepth);
+    }
+  }
+
+  if (databasePath === ':memory:') {
+    return runWithTxDepth(1, () => {
+      try {
+        return callback();
+      } finally {
+        setTxDepth(0);
+      }
+    });
+  }
+
+  return runWithTxDepth(1, () => {
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      const result = callback();
+      database.exec('COMMIT');
+      return result;
+    } catch (error) {
+      try {
+        database.exec('ROLLBACK');
+      } catch {
+        // The transaction may already have been rolled back by SQLite.
+      }
+      throw error;
+    } finally {
+      setTxDepth(0);
+    }
+  });
+}
 
 const readStatement = database.prepare(
   'SELECT payload FROM repository_snapshots WHERE namespace = ?',
@@ -139,45 +201,8 @@ export function readSnapshot<T>(namespace: string): T | null {
  * state. If the process dies mid-transaction, SQLite discards the
  * uncommitted WAL frames on the next open.
  */
-export function withWriteTransaction<T>(callback: () => T): T {
-  if (writeTransactionDepth > 0) {
-    writeTransactionDepth++;
-    try {
-      return callback();
-    } finally {
-      writeTransactionDepth--;
-    }
-  }
-
-  if (databasePath === ':memory:') {
-    writeTransactionDepth = 1;
-    try {
-      return callback();
-    } finally {
-      writeTransactionDepth = 0;
-    }
-  }
-
-  database.exec('BEGIN IMMEDIATE');
-  writeTransactionDepth = 1;
-  try {
-    const result = callback();
-    database.exec('COMMIT');
-    return result;
-  } catch (error) {
-    try {
-      database.exec('ROLLBACK');
-    } catch {
-      // The transaction may already have been rolled back by SQLite.
-    }
-    throw error;
-  } finally {
-    writeTransactionDepth = 0;
-  }
-}
-
 export function isInWriteTransaction(): boolean {
-  return writeTransactionDepth > 0;
+  return getTxDepth() > 0;
 }
 
 export function writeSnapshot<T>(namespace: string, value: T): void {

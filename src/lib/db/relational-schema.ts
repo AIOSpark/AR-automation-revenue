@@ -154,6 +154,7 @@ CREATE TABLE IF NOT EXISTS udm_api_idempotency_keys (
   record_id TEXT,
   fingerprint TEXT NOT NULL,
   response TEXT,
+  status TEXT NOT NULL DEFAULT 'reserved',
   PRIMARY KEY (organization_id, endpoint, key)
 );
 `;

@@ -3,15 +3,30 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Mail, CheckCircle2, ShieldCheck, ArrowRight, RefreshCw } from "lucide-react";
+import { Mail, CheckCircle2, ShieldCheck, ArrowRight, RefreshCw, AlertTriangle, RotateCw } from "lucide-react";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const email = searchParams.get("email") || "";
+  const error = searchParams.get("error") || "";
 
   const [verified, setVerified] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+
+  useEffect(() => {
+    if (error) {
+      const errorMessages: Record<string, string> = {
+        missing_token: "Verification link is missing a confirmation token.",
+        invalid_token: "The verification link is invalid or has already been used.",
+        no_email: "No email address was associated with the verification link.",
+        session_failed: "Unable to establish your session. Please try again.",
+        server_error: "A server error occurred during verification.",
+      };
+      console.error(`Verification error: ${error} — ${errorMessages[error] || "Unknown error"}`);
+    }
+  }, [error]);
 
   const handleSimulateVerification = async () => {
     if (!email) return;
@@ -24,16 +39,42 @@ function VerifyEmailContent() {
         body: JSON.stringify({ email }),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
         setVerified(true);
         setTimeout(() => {
           router.push("/dashboard");
         }, 1200);
+      } else {
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!email) return;
+    setResendLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Resend failed:", data.error);
       }
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      setResendLoading(false);
     }
   };
 
@@ -52,26 +93,43 @@ function VerifyEmailContent() {
           <span className="text-emerald-400 font-semibold">Your email has been confirmed. Redirecting to workspace...</span>
         ) : (
           <>
-            We sent a mandatory verification link to{" "}
+            We sent a confirmation link to{" "}
             <span className="text-white font-bold font-mono">{email || "your work email"}</span>.
-            Please verify your email before accessing organization data.
+            Please open your email and click the confirmation link to verify your address.
           </>
         )}
       </p>
 
+      {error && (
+        <div className="mb-6 p-4 rounded-xl bg-red-950/50 border border-[#FF2D2D]/50 text-red-200 text-xs flex items-center justify-center gap-2 font-mono">
+          <AlertTriangle className="w-4 h-4 text-[#FF2D2D] shrink-0" />
+          <span>
+            {error === "invalid_token"
+              ? "This verification link is invalid or has already been used. Please request a new confirmation email."
+              : error === "missing_token"
+              ? "No verification token was provided."
+              : error === "session_failed"
+              ? "Unable to establish your session. Please try signing in again."
+              : error === "server_error"
+              ? "A server error occurred. Please try again."
+              : "Verification failed. Please request a new confirmation email."}
+          </span>
+        </div>
+      )}
+
       {!verified && (
         <div className="space-y-4 pt-4 border-t border-neutral-800">
           <button
-            onClick={handleSimulateVerification}
-            disabled={loading}
-            className="w-full py-3.5 rounded-xl font-semibold text-sm text-white bg-[#FF2D2D] hover:bg-[#e02424] transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-[#FF2D2D]/20 flex items-center justify-center gap-2 active:scale-95"
+            onClick={handleResend}
+            disabled={resendLoading}
+            className="w-full py-3.5 rounded-xl font-semibold text-sm text-[#FF2D2D] border border-[#FF2D2D]/30 hover:bg-[#FF2D2D]/10 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {loading ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
+            {resendLoading ? (
+              <RotateCw className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <span>Confirm Email Verification</span>
-                <CheckCircle2 className="w-4 h-4" />
+                <RefreshCw className="w-4 h-4" />
+                <span>Resend Confirmation Email</span>
               </>
             )}
           </button>
@@ -103,7 +161,7 @@ export default function VerifyEmailPage() {
       </Suspense>
 
       <div className="text-center py-4 text-xs text-neutral-500 font-mono">
-        Mandatory Provider Email Verification Constraint Enforced
+        Email Confirmation via Supabase Auth
       </div>
     </div>
   );

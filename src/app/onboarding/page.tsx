@@ -63,6 +63,10 @@ export default function OnboardingPage() {
 
   // Step 6 Completion & Batch Results State
   const [batchResult, setBatchResult] = useState<any | null>(null);
+  const [previewResult, setPreviewResult] = useState<any | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [importHistory, setImportHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -70,6 +74,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     trackOnboardingEvent("onboarding_welcome_viewed");
+    fetchImportHistory();
 
     const params = new URLSearchParams(window.location.search);
     if (params.get("status") === "zoho_connected") {
@@ -80,6 +85,23 @@ export default function OnboardingPage() {
       setConnectorNotice("Zoho Books authorization was not completed. Please try again.");
     }
   }, []);
+
+  const fetchImportHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch("/api/import/history", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to load import history");
+      const data = await res.json();
+      setImportHistory(data.imports || []);
+    } catch (err: any) {
+      console.error("Failed to load import history:", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const handleTallyConnect = async () => {
     setConnectorLoading(true);
@@ -177,32 +199,68 @@ export default function OnboardingPage() {
     }
   };
 
-  // Step 4 Mapping Confirmation & Execution of Fault-Tolerant Import
+  // Step 4 Mapping Confirmation → Preview (validate without committing)
   const handleConfirmImport = async () => {
     if (!parsedData) return;
     setError(null);
-    setStep(5);
-    setProgressStage(1);
+    setPreviewLoading(true);
 
     try {
-      const res = await fetch("/api/onboarding/import", {
+      const res = await fetch("/api/import/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rows: parsedData.rows,
           columnMapping,
+          dateFormatConvention: "DD/MM/YYYY",
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to execute data import");
+      if (!res.ok) throw new Error(data.error || "Failed to generate import preview");
 
-      setProgressStage(4);
+      setPreviewResult(data);
+      setStep(5);
+    } catch (err: any) {
+      setError(err?.message || "Failed to generate import preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Step 5 Preview → Explicit Confirm & Import (commit to UDM)
+  const handleConfirmAndImport = async () => {
+    if (!previewResult || !parsedData) return;
+    setError(null);
+    setLoading(true);
+
+    try {
+      const idempotencyKey = `import_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+
+      const res = await fetch("/api/import/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({
+          rows: parsedData.rows,
+          columnMapping,
+          dateFormatConvention: "DD/MM/YYYY",
+          previewId: previewResult.previewId || null,
+          confirmed: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to confirm import");
+
       setBatchResult(data.batchResult);
       setStep(6);
     } catch (err: any) {
-      setError(err?.message || "Failed to import data");
-      setStep(4);
+      setError(err?.message || "Failed to confirm import");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -230,8 +288,8 @@ export default function OnboardingPage() {
             { id: 2, label: "Setup" },
             { id: 3, label: "Connect Source" },
             { id: 4, label: "Map Columns" },
-            { id: 5, label: "Ingest" },
-            { id: 6, label: "Complete" },
+            { id: 5, label: "Preview" },
+            { id: 6, label: "Import Results" },
           ].map((s) => (
             <div
               key={s.id}
@@ -275,14 +333,14 @@ export default function OnboardingPage() {
           </div>
 
           <div className="space-y-4 font-mono text-xs">
-            {[
-              { id: 1, title: "1. Welcome & Scope", desc: "Workspace creation & activation checklist" },
-              { id: 2, title: "2. Financial Parameters", desc: "Currency, FY start, & default payment terms" },
-              { id: 3, title: "3. Choose Source", desc: "Tally, Zoho, or Excel/CSV ingestion" },
-              { id: 4, title: "4. Column Mapping Matrix", desc: "Auto-detect & save header mappings" },
-              { id: 5, title: "5. Real-Time Ingestion", desc: "Schema validation & exception parsing" },
-              { id: 6, title: "6. Ledger Activation", desc: "Direct route to operational dashboard" },
-            ].map((s) => (
+              {[
+                { id: 1, title: "1. Welcome & Scope", desc: "Workspace creation & activation checklist" },
+                { id: 2, title: "2. Financial Parameters", desc: "Currency, FY start, & default payment terms" },
+                { id: 3, title: "3. Choose Source", desc: "Tally, Zoho, or Excel/CSV ingestion" },
+                { id: 4, title: "4. Column Mapping Matrix", desc: "Auto-detect & save header mappings" },
+                { id: 5, title: "5. Preview & Validate", desc: "Review rows, duplicates, and errors before import" },
+                { id: 6, title: "6. Import Results", desc: "Confirmed import committed to your ledger" },
+              ].map((s) => (
               <div
                 key={s.id}
                 className={`onboarding-step p-3 rounded-xl border transition-all ${
@@ -661,46 +719,138 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* STEP 5: REAL-TIME PROGRESS FEEDBACK */}
-        {step === 5 && (
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 sm:p-12 text-center shadow-2xl">
-            <RefreshCw className="w-12 h-12 text-[#FF2D2D] animate-spin mx-auto mb-6" />
-
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
-              Ingesting Receivables Data…
-            </h2>
-            <p className="text-xs sm:text-sm text-neutral-400 mb-8 font-mono">
-              Processing {parsedData?.totalRows || 0} records into organization ledger context
-            </p>
-
-            <div className="max-w-md mx-auto space-y-3 text-xs font-mono text-left">
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${progressStage >= 1 ? "bg-[#050505] border-[#FF2D2D]/40 text-white" : "bg-neutral-950 border-neutral-800 text-neutral-500"}`}>
-                <span className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#FF2D2D]" /> 1. Uploading file buffer & headers…
-                </span>
-                <span>Done</span>
+        {/* STEP 5: PREVIEW & VALIDATE */}
+        {step === 5 && previewResult && (
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 sm:p-12 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
+                  Preview & Validate Import
+                </h2>
+                <p className="text-xs sm:text-sm text-neutral-400 mb-4 font-mono">
+                  Review {previewResult.totalRows} detected rows before committing to your ledger.
+                </p>
               </div>
+              {previewLoading && (
+                <RefreshCw className="w-5 h-5 animate-spin text-[#FF2D2D]" />
+              )}
+            </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${progressStage >= 2 ? "bg-[#050505] border-[#FF2D2D]/40 text-white" : "bg-neutral-950 border-neutral-800 text-neutral-500"}`}>
-                <span className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#FF2D2D]" /> 2. Validating column schema & row data…
-                </span>
-                <span>{progressStage >= 2 ? "Verified" : "Pending"}</span>
+            {/* Summary Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+              <div className="p-4 rounded-xl bg-[#050505] border border-neutral-800">
+                <span className="text-xs font-mono text-neutral-400 uppercase tracking-wider">Total Rows</span>
+                <span className="text-2xl font-bold text-white mt-1 block">{previewResult.totalRows}</span>
               </div>
+              <div className="p-4 rounded-xl bg-[#050505] border border-[#059669]/30">
+                <span className="text-xs font-mono text-[#4ade80] uppercase tracking-wider">Valid</span>
+                <span className="text-2xl font-bold text-[#4ade80] mt-1 block">{previewResult.validCount}</span>
+              </div>
+              <div className="p-4 rounded-xl bg-[#050505] border border-[#dc2626]/30">
+                <span className="text-xs font-mono text-[#fca5a5] uppercase tracking-wider">Invalid</span>
+                <span className="text-2xl font-bold text-[#fca5a5] mt-1 block">{previewResult.invalidCount}</span>
+              </div>
+              <div className="p-4 rounded-xl bg-[#050505] border border-[#d97706]/30">
+                <span className="text-xs font-mono text-[#fbbf24] uppercase tracking-wider">Duplicates</span>
+                <span className="text-2xl font-bold text-[#fbbf24] mt-1 block">{previewResult.duplicateCount}</span>
+              </div>
+            </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${progressStage >= 3 ? "bg-[#050505] border-[#FF2D2D]/40 text-white" : "bg-neutral-950 border-neutral-800 text-neutral-500"}`}>
-                <span className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#FF2D2D]" /> 3. Ingesting invoices into tenant ledgers…
-                </span>
-                <span>{progressStage >= 3 ? "Complete" : "Pending"}</span>
+            {previewResult.warningCount > 0 && (
+              <div className="mb-6 p-4 rounded-xl bg-[#451a03]/30 border border-[#d97706]/30 text-[#fbbf24] text-xs font-mono flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                <span>{previewResult.warningCount} warning(s) detected — review before confirming.</span>
               </div>
+            )}
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${progressStage >= 4 ? "bg-[#050505] border-[#FF2D2D]/40 text-white" : "bg-neutral-950 border-neutral-800 text-neutral-500"}`}>
-                <span className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#FF2D2D]" /> 4. Analyzing records & detecting exceptions…
-                </span>
-                <span>{progressStage >= 4 ? "Finished" : "Running"}</span>
+            {/* Invalid Rows */}
+            {previewResult.invalidCount > 0 && (
+              <div className="mb-8">
+                <h3 className="text-xs font-mono text-[#fca5a5] uppercase tracking-wider font-bold mb-3">
+                  Invalid Rows
+                </h3>
+                <div className="max-h-60 overflow-y-auto space-y-2 p-4 rounded-xl bg-[#050505] border border-[#dc2626]/30 text-xs font-mono">
+                  {previewResult.previewResults
+                    .filter((r: any) => !r.valid && !r.isDuplicate)
+                    .slice(0, 10)
+                    .map((r: any, idx: number) => (
+                      <div key={idx} className="p-2 rounded border border-[#dc2626]/20 text-[#fca5a5]/90">
+                        <span className="font-bold">Row {r.rowNumber}:</span>{" "}
+                        {r.errors.map((e: any) => `${e.field}: ${e.reason}`).join("; ")}
+                      </div>
+                    ))}
+                </div>
               </div>
+            )}
+
+            {/* Duplicate Rows */}
+            {previewResult.duplicateCount > 0 && (
+              <div className="mb-8">
+                <h3 className="text-xs font-mono text-[#fbbf24] uppercase tracking-wider font-bold mb-3">
+                  Duplicate Rows
+                </h3>
+                <div className="max-h-60 overflow-y-auto space-y-2 p-4 rounded-xl bg-[#050505] border border-[#d97706]/30 text-xs font-mono">
+                  {previewResult.previewResults
+                    .filter((r: any) => r.isDuplicate)
+                    .slice(0, 10)
+                    .map((r: any, idx: number) => (
+                      <div key={idx} className="p-2 rounded border border-[#d97706]/20 text-[#fbbf24]/90">
+                        <span className="font-bold">Row {r.rowNumber}:</span>{" "}
+                        Duplicate of {r.duplicateOf}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Valid Sample */}
+            {previewResult.validCount > 0 && (
+              <div className="mb-8">
+                <h3 className="text-xs font-mono text-[#4ade80] uppercase tracking-wider font-bold mb-3">
+                  Valid Rows (sample)
+                </h3>
+                <div className="max-h-60 overflow-y-auto space-y-2 p-4 rounded-xl bg-[#050505] border border-[#059669]/30 text-xs font-mono">
+                  {previewResult.sampleValid.map((r: any, idx: number) => (
+                    <div key={idx} className="p-2 rounded border border-[#059669]/20 text-[#4ade80]/90">
+                      <span className="font-bold">Row:</span> {r.customerName} • {r.invoiceNumber} • {r.currency} {r.amountMinorUnits / 100} • Due {r.dueDate}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Confirm / Back Actions */}
+            <div className="pt-6 border-t border-neutral-800 flex items-center justify-between">
+              <button
+                onClick={() => setStep(4)}
+                disabled={previewLoading}
+                className="px-6 py-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold transition-all disabled:opacity-50"
+              >
+                ← Back to Mapping
+              </button>
+
+              {previewResult.validCount === 0 && (
+                <span className="text-xs font-mono text-[#fca5a5]">
+                  No valid rows to import. Fix errors and re-upload.
+                </span>
+              )}
+
+              {previewResult.validCount > 0 && (
+                <button
+                  onClick={handleConfirmAndImport}
+                  disabled={previewLoading || previewResult.validCount === 0}
+                  className="px-8 py-3.5 rounded-xl font-semibold text-sm text-white bg-[#FF2D2D] hover:bg-[#e02424] transition-all disabled:opacity-50 flex items-center gap-2 active:scale-95"
+                >
+                  {previewLoading ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Confirm & Import {previewResult.validCount} Rows</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -742,6 +892,39 @@ export default function OnboardingPage() {
               >
                 <span>Launch Dashboard with Real Data →</span>
               </button>
+            </div>
+
+            {/* Import History */}
+            <div className="mt-8 pt-6 border-t border-[#27272a]">
+              <h3 className="text-xs font-mono text-[#FF2D2D] uppercase tracking-wider font-bold mb-4">
+                Import History
+              </h3>
+              {historyLoading ? (
+                <p className="text-xs text-neutral-400">Loading import history...</p>
+              ) : (
+                importHistory.length === 0 ? (
+                  <p className="text-xs text-neutral-500">No previous imports for this organization.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {importHistory.map((batch: any) => (
+                      <div key={batch.importId} className="p-3 rounded-xl bg-[#050505] border border-neutral-800">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-mono font-bold text-white">{batch.originalFileName}</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-800 text-neutral-400">
+                            {batch.status}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-neutral-500 font-mono">
+                          {batch.totalRows} rows • {batch.successCount} imported • {batch.rejectedCount} rejected
+                        </div>
+                        <div className="text-[11px] text-neutral-500 font-mono mt-0.5">
+                          {batch.importTimestamp}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
             </div>
           </div>
         )}
