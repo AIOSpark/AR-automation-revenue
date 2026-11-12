@@ -66,8 +66,19 @@ class ReportSchedulerStore {
     return Array.from(this.schedules.values()).filter((s) => s.organization_id === orgId);
   }
 
-  public getSchedule(id: string): ReportScheduleRecord | undefined {
-    return this.schedules.get(id);
+  /**
+   * Get a schedule by ID with optional organization scoping.
+   * @param id The schedule ID
+   * @param orgId Optional organization ID for cross-tenant isolation.
+   *   When provided, returns the schedule only if its organization_id matches.
+   *   When omitted, returns the schedule regardless of organization (for backward compatibility).
+   * @returns The schedule record, or undefined if not found or org mismatch.
+   */
+  public getSchedule(id: string, orgId?: string): ReportScheduleRecord | undefined {
+    const s = this.schedules.get(id);
+    if (!s) return undefined;
+    if (!orgId || s.organization_id === orgId) return s;
+    return undefined;
   }
 
   public clearAll(): void {

@@ -1,4 +1,6 @@
 // AIOSpark Promise-to-Pay System Data Models & Store (Layer 20)
+// Copyright 2026 AIOSpark. All rights reserved.
+
 import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
 
 export type PromiseStatus = 'pending' | 'kept' | 'broken' | 'partial';
@@ -56,8 +58,7 @@ class PromiseStore {
     return this.gracePeriodDays;
   }
 
-  /**
-   * MANUAL RECORDING ENTRY POINT
+  /** MANUAL RECORDING ENTRY POINT
    * Strict Rule: recorded_via MUST be specified and cannot be null/undefined.
    */
   public createPromise(input: CreatePromiseInput): PaymentPromise {
@@ -89,8 +90,19 @@ class PromiseStore {
     return promise;
   }
 
-  public getPromise(id: string): PaymentPromise | null {
-    return this.promises.get(id) || null;
+  /**
+   * Get a promise by ID with optional organization scoping.
+   * @param id The promise ID
+   * @param orgId Optional organization ID for cross-tenant isolation.
+   *   When provided, returns the promise only if its organization_id matches.
+   *   When omitted, returns the promise regardless of organization (for backward compatibility).
+   * @returns The promise record, or null if not found or org mismatch.
+   */
+  public getPromise(id: string, orgId?: string): PaymentPromise | null {
+    const p = this.promises.get(id);
+    if (!p) return null;
+    if (!orgId || p.organization_id === orgId) return p;
+    return null;
   }
 
   public getPromises(orgId: string, customerId?: string): PaymentPromise[] {
@@ -125,8 +137,7 @@ class PromiseStore {
     return p;
   }
 
-  /**
-   * COMPUTED BROKEN-PROMISE RATE STATISTICS (Trailing 12 Months)
+  /** COMPUTED BROKEN-PROMISE RATE STATISTICS (Trailing 12 Months)
    * Consumed by Customer 360 & Risk Engine (Layer 12).
    */
   public getBrokenPromiseStats(
