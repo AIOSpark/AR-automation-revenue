@@ -91,18 +91,18 @@ class PromiseStore {
   }
 
   /**
-   * Get a promise by ID with optional organization scoping.
+   * Get a promise by ID with organization scoping.
    * @param id The promise ID
-   * @param orgId Optional organization ID for cross-tenant isolation.
-   *   When provided, returns the promise only if its organization_id matches.
-   *   When omitted, returns the promise regardless of organization (for backward compatibility).
-   * @returns The promise record, or null if not found or org mismatch.
+   * @param orgId The organization ID - mandatory for security-sensitive lookups.
+   *   Must match the promise's organization_id, or Error is thrown.
+   * @returns The promise record.
+   * @throws Error if the promise is not found or organization mismatch.
    */
-  public getPromise(id: string, orgId?: string): PaymentPromise | null {
+  public getPromise(id: string, orgId: string): PaymentPromise {
     const p = this.promises.get(id);
-    if (!p) return null;
-    if (!orgId || p.organization_id === orgId) return p;
-    return null;
+    if (!p) throw new Error(`Promise not found: ${id}`);
+    if (p.organization_id !== orgId) throw new Error(`Cross-tenant access denied: promise organization_id ${p.organization_id} does not match orgId ${orgId}`);
+    return p;
   }
 
   public getPromises(orgId: string, customerId?: string): PaymentPromise[] {

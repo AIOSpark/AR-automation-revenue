@@ -62,31 +62,31 @@ class ReportSchedulerStore {
     return record;
   }
 
+  /**
+   * Get a schedule by ID with organization scoping.
+   * @param id The schedule ID
+   * @param orgId The organization ID - mandatory for security-sensitive lookups.
+   *   Must match the schedule's organization_id, or Error is thrown.
+   * @returns The schedule record.
+   * @throws Error if the schedule is not found or organization mismatch.
+   */
+  public getSchedule(id: string, orgId: string): ReportScheduleRecord {
+    const s = this.schedules.get(id);
+    if (!s) throw new Error(`Schedule not found: ${id}`);
+    if (s.organization_id !== orgId) throw new Error(`Cross-tenant access denied: schedule organization_id ${s.organization_id} does not match orgId ${orgId}`);
+    return s;
+  }
+
+  /**
+   * Get schedules for a specific organization.
+   * @param orgId The organization ID to filter by.
+   * @returns Array of schedules belonging to the organization.
+   */
   public getSchedules(orgId: string): ReportScheduleRecord[] {
     return Array.from(this.schedules.values()).filter((s) => s.organization_id === orgId);
   }
 
-  /**
-   * Get a schedule by ID with optional organization scoping.
-   * @param id The schedule ID
-   * @param orgId Optional organization ID for cross-tenant isolation.
-   *   When provided, returns the schedule only if its organization_id matches.
-   *   When omitted, returns the schedule regardless of organization (for backward compatibility).
-   * @returns The schedule record, or undefined if not found or org mismatch.
-   */
-  public getSchedule(id: string, orgId?: string): ReportScheduleRecord | undefined {
-    const s = this.schedules.get(id);
-    if (!s) return undefined;
-    if (!orgId || s.organization_id === orgId) return s;
-    return undefined;
-  }
-
-  public clearAll(): void {
-    this.schedules.clear();
-  }
-
-  /**
-   * SCHEDULED JOB RUNNER
+  /** SCHEDULED JOB RUNNER
    * Evaluates report schedules and dispatches reports via Layer 19 Email Provider.
    */
   public async runScheduledReportsJob(
@@ -123,7 +123,7 @@ class ReportSchedulerStore {
           const sendRes = await TransactionalEmailProvider.sendEmail({
             toEmail: recipientEmail,
             subject: `[AIOSpark Scheduled Report] ${reportDef.name} (${reportOutput.format.toUpperCase()})`,
-            body: `Attached is your scheduled ${sched.cadence} report "${reportDef.name}" generated on ${reportOutput.generatedAt}.\nRows included: ${reportOutput.rowCount}\nFile name: ${reportOutput.fileName}`,
+            body: `Attached is your scheduled ${sched.cadence} report "${reportDef.name}" generated on ${reportOutput.generatedAt}.\\nRows included: ${reportOutput.rowCount}\\nFile name: ${reportOutput.fileName}`,
             organizationId: sched.organization_id,
           });
 
@@ -143,6 +143,10 @@ class ReportSchedulerStore {
     }
 
     return { processedCount, emailsSentCount, errors };
+  }
+
+  public clearAll(): void {
+    this.schedules.clear();
   }
 }
 
