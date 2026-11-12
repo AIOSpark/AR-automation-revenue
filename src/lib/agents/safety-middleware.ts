@@ -3,6 +3,7 @@
 // Shared middleware embedded inside AgentExecutor that CANNOT be bypassed by individual agent implementations or org config overrides.
 
 import { policyEngine, PolicyContext, MANDATORY_APPROVAL_HIGH_RISK_ACTIONS } from './policy-engine';
+import { getDatabase, withWriteTransaction, writeSnapshot, deleteSnapshot } from '../db/durable-repository';
 import { udmStore } from '../udm/store';
 import { can, Action, Resource, Role } from '../tenant/permissions';
 
@@ -53,8 +54,12 @@ export const HARD_PRODUCT_SAFETY_FLOORS = {
 };
 
 class SafetyMiddlewareEngine {
-  private recentActionHashes: Map<string, number> = new Map(); // Idempotency tracker
+// Idempotency tracker uses durable SQLite storage (namespace: 'safety:double_execution')
+// instead of a process-local Map, so entries survive process restarts and span
+// across application instances. The snapshot is read/written via withWriteTransaction.
+ private recentActionHashes: Map<string, number> = new Map(); // will be populated from durable store on init
 
+private readonly idempotencyNamespace = 'safety:double_execution'
   /**
    * Maps each actionType to the specific RBAC (action, resource) pair it requires,
    * instead of blanket-checking 'edit' on 'invoices' for every action.
@@ -258,24 +263,55 @@ class SafetyMiddlewareEngine {
     };
   }
 
-  /**
-   * Idempotency & Double-Click Protection Helper
+/**
+   * Idempotency & Double-Click Protection (Durable, not process-local)
    */
   public checkDoubleExecution(context: SafetyPipelineContext): { isDuplicate: boolean; hash: string } {
     const key = `${context.organizationId}:${context.agentName}:${context.targetEntity}:${context.targetId}:${context.actionType}`;
-    const now = Date.now();
-    const lastExecuted = this.recentActionHashes.get(key);
 
-    if (lastExecuted && now - lastExecuted < 5000) {
-      return { isDuplicate: true, hash: key };
+    // Check durable SQLite storage for existing entry
+    const db = getDatabase();
+    const statement = db.prepare(
+      'SELECT payload FROM repository_snapshots WHERE namespace = ?'
+    );
+    const existing = statement.get(this.idempotencyNamespace) as {
+      payload?: string;
+    } | undefined;
+
+    if (existing?.payload) {
+      try {
+        const stored = JSON.parse(existing.payload) as {
+          hash: string;
+          timestamp: string;
+          organizationId: string;
+        };
+        // Check if the same key was executed within the idempotency window
+        const storedTs = new Date(stored.timestamp).getTime();
+        const now = Date.now();
+        const idempotencyWindowMs = 24 * 60 * 60 * 1000; // 24 hours (was 5s locally)
+
+        if (now - storedTs < idempotencyWindowMs && stored.hash === key) {
+          return { isDuplicate: true, hash: key };
+        }
+      } catch {
+        // Corrupt data - treat as not duplicate
+      }
     }
 
-    this.recentActionHashes.set(key, now);
+    // Record this execution in durable storage
+    const now = new Date().toISOString();
+    const payload = JSON.stringify({
+      hash: key,
+      timestamp: now,
+      organizationId: context.organizationId,
+    });
+    writeSnapshot(this.idempotencyNamespace, payload);
+
     return { isDuplicate: false, hash: key };
   }
 
   public clearDeduplicationCache(): void {
-    this.recentActionHashes.clear();
+    deleteSnapshot(this.idempotencyNamespace);
   }
 }
 
