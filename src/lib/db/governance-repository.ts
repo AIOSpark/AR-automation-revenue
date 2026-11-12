@@ -4,6 +4,7 @@
 // records completion. A crash rolls back both the rows and the snapshot
 // deletion, so restarting the same migration is always safe.
 
+import { randomUUID } from 'node:crypto';
 import {
   deleteSnapshot,
   getDatabase,
@@ -90,9 +91,9 @@ export function insertApprovalRequest(request: Row): void {
         execution_status, execution_error, executed_at, created_at, payload
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(...approvalRequestValues(request));
-    // Insert audit event in same transaction
+    // Insert audit event in same transaction with a unique, collision-free ID
     appendAuditEvent({
-      id: `audit_approval_request_create_${request.id}`,
+      id: randomUUID(),
       organization_id: request.organization_id,
       actor_user_id: null,
       actor_type: 'system',
@@ -137,9 +138,11 @@ export function updateApprovalRequest(request: Row): void {
       json(request),
       String(request.id),
     );
-    // Insert audit event in same transaction with before/after state
+    // Insert audit event in same transaction with a unique, collision-free ID.
+    // Each approval status transition (approve → execute) is a distinct event
+    // and must never reuse the same audit ID.
     appendAuditEvent({
-      id: `audit_approval_request_update_${request.id}`,
+      id: randomUUID(),
       organization_id: request.organization_id,
       actor_user_id: null,
       actor_type: 'system',
@@ -263,9 +266,9 @@ export function insertBillingSubscription(subscription: Row): void {
       String(subscription.updated_at),
       json(subscription),
     );
-    // Insert audit event in same transaction
+    // Insert audit event in same transaction with a unique, collision-free ID
     appendAuditEvent({
-      id: `audit_billing_subscription_create_${subscription.id}`,
+      id: randomUUID(),
       organization_id: subscription.organization_id,
       actor_user_id: null,
       actor_type: 'system',
@@ -284,50 +287,52 @@ export function insertBillingSubscription(subscription: Row): void {
 
 // ---- Audit-augmented updateBillingSubscription ----
 export function updateBillingSubscription(subscription: Row, expectedVersion: number): boolean {
-  // Capture before state from the database
-  const db = getDatabase();
-  const beforeRow = db.prepare('SELECT plan_id, status, version FROM billing_subscriptions WHERE organization_id = ?').get(subscription.organization_id) as Row | null;
-  const beforePlanId = beforeRow?.plan_id;
-  const beforeStatus = beforeRow?.status;
-  const beforeVersion = beforeRow?.version;
+  return withWriteTransaction(() => {
+    // Capture before state from the database within the transaction
+    const db = getDatabase();
+    const beforeRow = db.prepare('SELECT plan_id, status, version FROM billing_subscriptions WHERE organization_id = ?').get(subscription.organization_id) as Row | null;
+    const beforePlanId = beforeRow?.plan_id;
+    const beforeStatus = beforeRow?.status;
+    const beforeVersion = beforeRow?.version;
 
-  const result = db.prepare(`
-      UPDATE billing_subscriptions SET
-        id = ?, plan_id = ?, status = ?, billing_interval = ?,
-        current_period_start = ?, current_period_end = ?,
-        version = ?, updated_at = ?, payload = ?
-      WHERE organization_id = ? AND version = ?
-    `).run(
-      String(subscription.id),
-      String(subscription.plan_id),
-      String(subscription.status),
-      subscription.billing_interval ?? null,
-      String(subscription.current_period_start),
-      String(subscription.current_period_end),
-      Number(subscription.version),
-      String(subscription.updated_at),
-      json(subscription),
-      String(subscription.organization_id),
-      expectedVersion,
-    );
-  // Insert audit event in same transaction with before/after state
-  appendAuditEvent({
-    id: `audit_billing_subscription_update_${subscription.id ?? 'temp'}_${Math.random().toString(36).substring(2, 9)}`,
-    organization_id: subscription.organization_id,
-    actor_user_id: null,
-    actor_type: 'system',
-    action_type: 'billing_subscription_update',
-    subject_type: 'billing_subscription' as const,
-    subject_id: subscription.organization_id,
-    before_state: beforePlanId !== undefined ? { plan_id: beforePlanId, status: beforeStatus, version: beforeVersion } : null,
-    after_state: { plan_id: subscription.plan_id, status: subscription.status, version: subscription.version },
-    ai_context: null,
-    approval_context: null,
-    result: 'success' as const,
-    created_at: new Date().toISOString(),
+    const result = db.prepare(`
+        UPDATE billing_subscriptions SET
+          id = ?, plan_id = ?, status = ?, billing_interval = ?,
+          current_period_start = ?, current_period_end = ?,
+          version = ?, updated_at = ?, payload = ?
+        WHERE organization_id = ? AND version = ?
+      `).run(
+        String(subscription.id),
+        String(subscription.plan_id),
+        String(subscription.status),
+        subscription.billing_interval ?? null,
+        String(subscription.current_period_start),
+        String(subscription.current_period_end),
+        Number(subscription.version),
+        String(subscription.updated_at),
+        json(subscription),
+        String(subscription.organization_id),
+        expectedVersion,
+      );
+    // Insert audit event in same transaction with before/after state
+    appendAuditEvent({
+      id: randomUUID(),
+      organization_id: subscription.organization_id,
+      actor_user_id: null,
+      actor_type: 'system',
+      action_type: 'billing_subscription_update',
+      subject_type: 'billing_subscription' as const,
+      subject_id: subscription.organization_id,
+      before_state: beforePlanId !== undefined ? { plan_id: beforePlanId, status: beforeStatus, version: beforeVersion } : null,
+      after_state: { plan_id: subscription.plan_id, status: subscription.status, version: subscription.version },
+      ai_context: null,
+      approval_context: null,
+      result: 'success' as const,
+      created_at: new Date().toISOString(),
+    });
+    // The update may affect 0 rows (e.g., version mismatch) or 1+ rows; return accordingly
+    return (result as any)?.changes > 0;
   });
-  // The update may affect 0 rows (e.g., version mismatch) or 1+ rows; return accordingly
-  return (result as any)?.changes > 0;
 }
 export function insertBillingSubscriptionHistory(subscription: Row): void {
   getDatabase().prepare(`
@@ -368,6 +373,12 @@ export function clearBillingSubscriptions(): void {
 // ---------------------------------------------------------------------------
 
 export function appendAuditEvent(record: Row): void {
+  const id = record.id ?? randomUUID();
+  // Idempotent retry: if an audit event with this ID already exists, skip.
+  // This preserves append-only semantics while allowing safe retries of the
+  // same logical event without silently discarding events.
+  const existing = getDatabase().prepare('SELECT 1 AS present FROM audit_events WHERE id = ?').get(id);
+  if (existing) return;
   getDatabase().prepare(`
     INSERT INTO audit_events(
       id, organization_id, actor_user_id, actor_type, action_type,
@@ -375,7 +386,7 @@ export function appendAuditEvent(record: Row): void {
       ai_context, approval_context, result, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    String(record.id),
+    id,
     String(record.organization_id),
     record.actor_user_id ?? null,
     String(record.actor_type),

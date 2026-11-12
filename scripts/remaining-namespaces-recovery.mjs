@@ -11,7 +11,7 @@
  *   node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/remaining-namespaces-recovery.mjs
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, execSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -395,7 +395,6 @@ cleanupDbFiles();
 // Check archive source: no prior commits, no pushes, baseline preserved
 // Generate SHA-256 of workspace root (excluding archive files and node_modules)
 import crypto from 'node:crypto';
-const { execSync } = require('node:child_process');
 const root = process.cwd();
 const exclude = ['node_modules', '.git', 'aiOSPARK-source-2026-11-11-HIGH-009R.tar.gz', 'aiOSPARK-source-2026-11-11-HIGH-009S.tar.gz'];
 // List all files and compute hash

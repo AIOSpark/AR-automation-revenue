@@ -367,6 +367,13 @@ class ApprovalStore {
     if (!req) throw new Error(`Approval request not found: ${id}`);
     if (req.status !== 'approved') throw new Error(`Approval request ${id} is not approved`);
 
+    // Idempotent: if this execution result is already recorded, return early.
+    // Repeated execution requests must be safe and must not create duplicate
+    // financial effects or duplicate audit events.
+    if (req.execution_status === result && req.executed_at !== null) {
+      return req;
+    }
+
     const now = new Date().toISOString();
     req.execution_status = result;
     req.execution_error = result === 'failed' ? (error || 'Approval execution failed') : null;

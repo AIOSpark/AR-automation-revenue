@@ -10,7 +10,7 @@ const strong = isSessionSecretStrong();
 console.log(`   isSessionSecretStrong(): ${strong ? 'PASS' : 'FAIL'}`);
 console.log(`   Secret length: ${secret.length} chars (base64url)`);
 console.log(`   Minimum required: 43 base64url chars (256 bits)`);
-console.log(`   Validation: ${strong ? 'Secret meets 32-byte base64url requirement' : 'Secret does not meet requirements'}\n`;
+console.log(`   Validation: ${strong ? 'Secret meets 32-byte base64url requirement' : 'Secret does not meet requirements'}\n`);
 
 // 2. Token creation with strong secret
 console.log('2. Token creation with strong secret:');

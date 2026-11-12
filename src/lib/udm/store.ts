@@ -73,6 +73,7 @@ class UniversalDataStore {
   private _suppressNotifications = false;
   private _pendingNotifications: Set<string> = new Set();
   private _transactionLock: Promise<unknown> = Promise.resolve(); // Serializes in-process transactions
+  private _batchInsertDepth = 0; // Nested batch insert scope
   private apiIdempotencyKeys: Map<string, { recordId: string | null; fingerprint: string; response: unknown; status: 'reserved' | 'committed' | 'failed' }> = new Map(); // Keyed by orgId:endpoint:key
   private lastPersistedState: UDMState | null = null;
   private dirtyInvoices: Set<string> = new Set();
@@ -88,6 +89,7 @@ class UniversalDataStore {
 
   /** Notify registered handlers of a data change for an org. */
   private notifyDataChange(orgId: string): void {
+    if (this._writeDepth > 0) return;
     if (!this.onDataChange) return;
     if (this._suppressNotifications) {
       this._pendingNotifications.add(orgId);
@@ -235,26 +237,36 @@ class UniversalDataStore {
   }
 
   /**
+   * Run multiple mutations under a single durable write scope. All in-memory
+   * mutations from the callback are applied first, then persisted to SQLite
+   * once. This avoids the O(n) SQLite writes that would occur if each
+     * mutation persisted individually, which is critical for batch imports
+   * of large datasets.
+   */
+  public batchInsert(callback: () => void): void {
+    this._batchInsertDepth++;
+    try {
+      callback();
+    } finally {
+      this._batchInsertDepth--;
+      this.persist();
+    }
+  }
+
+  /**
    * Serializes access to an idempotency key so that concurrent requests with
    * the same key cannot both pass the existence check and create duplicates.
    * Within a single Node.js process the event loop already serializes
    * synchronous work; this lock adds protection against future async work
    * interleaving between the idempotency check and the record write.
    */
-  private async withIdempotencyLock<T>(orgId: string, key: string, operation: () => T): Promise<T> {
-    const lockKey = `${orgId}:${key}`;
-
-    // Wait for any in-flight operation on this key to complete
+  private async withIdempotencyLock<T>(lockKey: string, operation: () => T): Promise<T> {
+    // Wait for any in-flight operation on this key to complete. This
+    // serializes concurrent requests with the same idempotency key so that
+    // only one performs the financial mutation; the others observe the result.
     const inFlight = this.idempotencyLocks.get(lockKey);
     if (inFlight) {
       await inFlight;
-    }
-
-    // After waiting, check whether the key was already resolved by the
-    // in-flight operation
-    const existingRecordId = this.idempotencyKeys.get(lockKey);
-    if (existingRecordId) {
-      return existingRecordId as unknown as T;
     }
 
     const promise = Promise.resolve().then(operation);
@@ -281,32 +293,31 @@ class UniversalDataStore {
     key: string,
     fingerprint: string
   ): Promise<{ status: 'available' | 'recoverable' | 'replay' | 'conflict'; recordId: string | null; response: unknown | null }> {
-    return this.withIdempotencyLock<{ status: 'available' | 'recoverable' | 'replay' | 'conflict'; recordId: string | null; response: unknown | null }>(orgId, key, () => {
+    const apiLockKey = `${orgId}:${endpoint}:${key}`;
+    return this.withIdempotencyLock<{ status: 'available' | 'recoverable' | 'replay' | 'conflict'; recordId: string | null; response: unknown | null }>(apiLockKey, () => {
       return this.runWrite(() => {
-        const lockKey = `${orgId}:${endpoint}:${key}`;
-        const existing = this.apiIdempotencyKeys.get(lockKey);
+        const existing = this.apiIdempotencyKeys.get(apiLockKey);
         if (!existing) {
           // Reserve the key as pending (no response yet) to prevent concurrent duplicates
-          this.apiIdempotencyKeys.set(lockKey, { recordId: null, fingerprint, response: null, status: 'reserved' });
+          this.apiIdempotencyKeys.set(apiLockKey, { recordId: null, fingerprint, response: null, status: 'reserved' });
           this.persist();
           return { status: 'available' as const, recordId: null, response: null };
         }
-        if (existing.status === 'reserved') {
-          // Previous attempt reserved the key but never finalized — possible crash.
-          // Return 'recoverable' so the caller can retry. The caller must verify
-          // whether the financial transaction actually completed before retrying.
-          return { status: 'recoverable' as const, recordId: null, response: null };
+        if (existing.status === 'failed') {
+          // Failed operation → deterministic recovery: allow retry by
+          // re-reserving the key with the new fingerprint.
+          this.apiIdempotencyKeys.set(apiLockKey, { recordId: null, fingerprint, response: null, status: 'reserved' });
+          this.persist();
+          return { status: 'available' as const, recordId: null, response: null };
         }
-        if (existing.status === 'committed') {
-          if (existing.fingerprint !== fingerprint) {
-            return { status: 'conflict' as const, recordId: existing.recordId, response: null };
-          }
-          return { status: 'replay' as const, recordId: existing.recordId, response: existing.response };
+        if (existing.fingerprint !== fingerprint) {
+          // Same key, different fingerprint → conflict (HTTP 409)
+          return { status: 'conflict' as const, recordId: existing.recordId, response: null };
         }
-        // existing.status === 'failed' — treat as available for retry
-        this.apiIdempotencyKeys.set(lockKey, { recordId: null, fingerprint, response: null, status: 'reserved' });
-        this.persist();
-        return { status: 'available' as const, recordId: null, response: null };
+        // Same key + same fingerprint → replay, regardless of status.
+        // If status is 'reserved' the operation is in-progress / crash-recovery;
+        // recordId and response will be null until finalized.
+        return { status: 'replay' as const, recordId: existing.recordId, response: existing.response };
       });
     });
   }
@@ -371,14 +382,26 @@ class UniversalDataStore {
   }
 
   private persist(): void {
+    if (this._batchInsertDepth > 0) return;
+
     const state = this.captureState();
+    console.error(`DEBUG persist: customers.keys=[${Array.from(state.customers.keys()).join(',')}], invoices.size=${state.invoices.length}, lastPersistedState.customers=${this.lastPersistedState?.customers?.length ?? 0}, lastPersistedState.customers.keys=[${this.lastPersistedState?.customers?.map(c => c.id).join(',') ?? 'none'}]`);
     this.validateState(state);
     const invoiceFastPath = !this.forceFullProjection && this.dirtyInvoices.size > 0;
 
-    // Relational tables are the authoritative store. Invoice-only mutations
-    // use a focused upsert so large imports do not rewrite unrelated rows.
+    // Invoice-only fast path is safe only when no new customers/payments
+    // were added during this write scope. writeUdmRelationalInvoices only
+    // upserts invoices, so referenced customers/payments must already exist
+    // in SQLite to satisfy FK constraints.
+    const hasNewEntities = invoiceFastPath &&
+      state.invoices.some((inv) => {
+        if (!this.dirtyInvoices.has(inv.id)) return false;
+        const customerNew = !this.lastPersistedState?.customers?.some((c) => c.id === inv.customer_id);
+        return customerNew;
+      });
+
     withWriteTransaction(() => {
-      if (invoiceFastPath) {
+      if (invoiceFastPath && !hasNewEntities) {
         writeUdmRelationalInvoices(
           state.invoices.filter((invoice) => this.dirtyInvoices.has(invoice.id)),
         );
@@ -388,7 +411,7 @@ class UniversalDataStore {
     });
     this.dirtyInvoices.clear();
     this.forceFullProjection = false;
-    if (!invoiceFastPath) this.lastPersistedState = structuredClone(state);
+    this.lastPersistedState = structuredClone(state);
   }
 
   /**
@@ -406,7 +429,10 @@ class UniversalDataStore {
     };
     const assertRef = (collection: Map<string, { organization_id: string }>, id: string, organizationId: string, label: string) => {
       const target = collection.get(id);
-      if (!target) throw new Error(`Integrity violation: ${label} references missing record ${id}`);
+      if (!target) {
+        console.error(`DEBUG validateState: ${label} ${id} references missing record. customers.size=${customers.size}, invoices.size=${invoices.size}. customer keys: ${Array.from(customers.keys()).slice(0,5).join(',')}`);
+        throw new Error(`Integrity violation: ${label} references missing record ${id}`);
+      }
       if (target.organization_id !== organizationId) throw new Error(`Integrity violation: ${label} crosses tenant boundary`);
     };
 
@@ -535,6 +561,7 @@ class UniversalDataStore {
     const now = new Date().toISOString();
     const record: Customer = { ...data, id, created_at: now, updated_at: now };
     this.customers.set(id, record);
+    console.error(`DEBUG insertCustomer: id=${id}, org=${data.organization_id}, customers.size=${this.customers.size}`);
     this.persist();
     this.notifyDataChange(data.organization_id);
 
@@ -605,6 +632,7 @@ class UniversalDataStore {
       if (existingRecordId) {
         const existing = this.invoices.get(existingRecordId);
         if (existing) {
+          console.error(`DEBUG insertInvoiceInternal: returning existing invoice ${existingRecordId}`);
           return existing;
         }
       }
@@ -614,6 +642,7 @@ class UniversalDataStore {
     const now = new Date().toISOString();
     const record: Invoice = { ...data, id, created_at: now, updated_at: now };
     this.invoices.set(id, record);
+    console.error(`DEBUG insertInvoiceInternal: id=${id}, customer_id=${data.customer_id}, customers.size=${this.customers.size}, customer_exists=${this.customers.has(data.customer_id)}`);
     this.dirtyInvoices.add(id);
 
     if (data.idempotency_key) {
@@ -792,12 +821,21 @@ class UniversalDataStore {
       }
     }
 
-    // Duplicate prevention: same payment cannot be matched to the same invoice twice
+    // Idempotent duplicate prevention: same payment+invoice+amount returns
+    // the existing match (crash-safe retry). Same payment+invoice with a
+    // different amount is a genuine conflict.
     const existingMatch = Array.from(this.matches.values()).find(
       (m) => m.payment_id === data.payment_id && m.invoice_id === data.invoice_id
     );
     if (existingMatch) {
-      throw new Error(`Duplicate payment match: payment ${data.payment_id} is already matched to invoice ${data.invoice_id}`);
+      if (existingMatch.matched_amount_minor_units === data.matched_amount_minor_units) {
+        // Idempotent replay: financial effect already committed, return existing match.
+        return existingMatch;
+      }
+      // Same payment+invoice but different amount → conflict.
+      throw new Error(
+        `Duplicate payment match conflict: payment ${data.payment_id} already matched to invoice ${data.invoice_id} for ${existingMatch.matched_amount_minor_units}, requested ${data.matched_amount_minor_units}`
+      );
     }
     const id = `match_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
     const now = new Date().toISOString();

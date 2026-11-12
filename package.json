@@ -63,7 +63,11 @@
     "backup:verify": "node scripts/sqlite-backup.mjs verify",
     "backup:restore-verify": "node scripts/sqlite-backup.mjs restore-verify",
     "backup:schedule": "node scripts/sqlite-backup.mjs schedule",
-    "test:pilot-security": "AIOSPARK_DB_PATH=/tmp/aiospark-pilot-test.sqlite AIOSPARK_TEST_MODE=false node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-pilot-security.mjs"
+    "test:pilot-security": "AIOSPARK_DB_PATH=/tmp/aiospark-pilot-test.sqlite AIOSPARK_TEST_MODE=false node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-pilot-security.mjs",
+    "test:durability-restart": "rm -f /tmp/aiospark-durability-restart-test.sqlite /tmp/aiospark-durability-restart-test.sqlite-wal /tmp/aiospark-durability-restart-test.sqlite-shm /tmp/aiospark-durability-restart-expected.json && AIOSPARK_DB_PATH=/tmp/aiospark-durability-restart-test.sqlite AIOSPARK_TEST_MODE=false node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-durability-restart.mjs",
+    "test:concurrent-idempotency": "rm -f /tmp/aiospark-concurrent-idem-test.sqlite /tmp/aiospark-concurrent-idem-test.sqlite-wal /tmp/aiospark-concurrent-idem-test.sqlite-shm && AIOSPARK_DB_PATH=/tmp/aiospark-concurrent-idem-test.sqlite AIOSPARK_TEST_MODE=false node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-concurrent-idempotency.mjs",
+    "test:financial-recovery": "rm -f /tmp/aiospark-fin-recovery-test.sqlite /tmp/aiospark-fin-recovery-test.sqlite-wal /tmp/aiospark-fin-recovery-test.sqlite-shm && AIOSPARK_DB_PATH=/tmp/aiospark-fin-recovery-test.sqlite AIOSPARK_TEST_MODE=false node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/test-financial-recovery.mjs",
+    "test:cross-idempotency": "rm -f /tmp/aiospark-cross-idem.sqlite /tmp/aiospark-cross-idem.sqlite-wal /tmp/aiospark-cross-idem.sqlite-shm && AIOSPARK_DB_PATH=/tmp/aiospark-cross-idem.sqlite AIOSPARK_TEST_MODE=false node --import ./scripts/test-only-server-modules.mjs --import tsx scripts/cross-process-idempotency-harness.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

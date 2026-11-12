@@ -1,5 +1,6 @@
 // AIOSpark Audit System Store & Types (Layer 26)
 // Provides a canonical, provably immutable append-only audit trail with RLS and trigger enforcement.
+import { randomUUID } from 'node:crypto';
 import { isInWriteTransaction, withWriteTransaction } from '../db/durable-repository';
 import {
   appendAuditEvent,
@@ -109,7 +110,7 @@ class AuditStore {
       throw new Error('Tenant Context Error: organization_id is required for audit_log entries');
     }
 
-    const id = `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const id = randomUUID();
     const created_at = new Date().toISOString();
 
     const record: AuditLogRecord = {

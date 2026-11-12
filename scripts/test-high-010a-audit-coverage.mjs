@@ -94,7 +94,6 @@ async function main() {
   // Test 2: Verify that the four mutation paths are instrumented
   // by checking the source code has the audit event insertions
   console.log('Test 2: Verify audit event insertion points in source code...');
-  const fs = require('fs');
   const governanceContent = fs.readFileSync(
     './src/lib/db/governance-repository.ts', 'utf8'
   );
@@ -114,7 +113,6 @@ async function main() {
   console.log('Test 3: Existing test suites still pass...');
   // Phase 2 execution recovery
   // We just verify the test files exist and are valid
-  const fsExtra = require('fs-extra');
   const testFiles = [
     'scripts/test-remaining-execution-recovery.mjs',
     'scripts/test-remaining-reconciliation-recovery.mjs',
@@ -125,7 +123,7 @@ async function main() {
   ];
   let allTestsExist = true;
   for (const tf of testFiles) {
-    if (!fsExtra.existsSync(tf)) {
+    if (!fs.existsSync(tf)) {
       allTestsExist = false;
       break;
     }

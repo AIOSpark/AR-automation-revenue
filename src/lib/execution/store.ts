@@ -33,6 +33,18 @@ export class ExecutionStore {
   public create(record: Omit<ExecutionRecord, 'created_at' | 'updated_at'>): ExecutionRecord {
     return withWriteTransaction(() => {
       this.reloadFromDurableState();
+
+      // Cross-process idempotency: if an execution with this key already exists
+      // (committed by another process while we waited for the write lock),
+      // return it instead of inserting a duplicate that would violate the
+      // UNIQUE (organization_id, idempotency_key) constraint.
+      if (record.idempotency_key) {
+        const existing = this.getByIdempotencyKey(record.organization_id, record.idempotency_key);
+        if (existing) {
+          return existing;
+        }
+      }
+
       const now = new Date().toISOString();
       const fullRecord: ExecutionRecord = {
         ...record,
@@ -70,10 +82,7 @@ export class ExecutionStore {
     return null;
   }
 
-  /**
-   * State transition, execution row and audit event commit or roll back
-   * together. The audit write deliberately joins this transaction.
-   */
+  /** State transition, execution row and audit event commit or roll back together. The audit write deliberately joins this transaction. */
   public updateState(id: string, state: ExecutionState, updates: Partial<ExecutionRecord> = {}): ExecutionRecord {
     return withWriteTransaction(() => {
       this.reloadFromDurableState();

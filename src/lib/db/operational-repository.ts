@@ -33,46 +33,50 @@ function mark(db: Db, namespace: string): void {
 // ---------------------------------------------------------------------------
 
 export function insertExecution(record: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO execution_records(
-      id, organization_id, requesting_user_id, approving_user_id, action_type,
-      target_entity_type, target_entity_ids, action_payload, action_payload_hash,
-      idempotency_key, approval_request_id, execution_attempt_id, state,
-      before_state_snapshot, expected_outcome, commit_reference, executed_at,
-      committed_at, verified_at, verification_result, failure_reason,
-      failure_classification, recovery_attempts, created_at, updated_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(record.id), String(record.organization_id),
-    record.requesting_user_id ?? null, record.approving_user_id ?? null,
-    String(record.action_type), String(record.target_entity_type),
-    json(record.target_entity_ids ?? []), json(record.action_payload ?? {}),
-    String(record.action_payload_hash), String(record.idempotency_key),
-    record.approval_request_id ?? null, String(record.execution_attempt_id),
-    String(record.state), json(record.before_state_snapshot ?? {}),
-    json(record.expected_outcome ?? {}), record.commit_reference ?? null,
-    record.executed_at ?? null, record.committed_at ?? null, record.verified_at ?? null,
-    record.verification_result === null ? null : json(record.verification_result),
-    record.failure_reason ?? null, record.failure_classification ?? null,
-    Number(record.recovery_attempts ?? 0), String(record.created_at), String(record.updated_at),
-    json(record),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO execution_records(
+        id, organization_id, requesting_user_id, approving_user_id, action_type,
+        target_entity_type, target_entity_ids, action_payload, action_payload_hash,
+        idempotency_key, approval_request_id, execution_attempt_id, state,
+        before_state_snapshot, expected_outcome, commit_reference, executed_at,
+        committed_at, verified_at, verification_result, failure_reason,
+        failure_classification, recovery_attempts, created_at, updated_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(record.id), String(record.organization_id),
+      record.requesting_user_id ?? null, record.approving_user_id ?? null,
+      String(record.action_type), String(record.target_entity_type),
+      json(record.target_entity_ids ?? []), json(record.action_payload ?? {}),
+      String(record.action_payload_hash), String(record.idempotency_key),
+      record.approval_request_id ?? null, String(record.execution_attempt_id),
+      String(record.state), json(record.before_state_snapshot ?? {}),
+      json(record.expected_outcome ?? {}), record.commit_reference ?? null,
+      record.executed_at ?? null, record.committed_at ?? null, record.verified_at ?? null,
+      record.verification_result === null ? null : json(record.verification_result),
+      record.failure_reason ?? null, record.failure_classification ?? null,
+      Number(record.recovery_attempts ?? 0), String(record.created_at), String(record.updated_at),
+      json(record),
+    );
+  });
 }
 
 export function updateExecution(record: Row): void {
-  getDatabase().prepare(`
-    UPDATE execution_records SET
-      state = ?, commit_reference = ?, executed_at = ?, committed_at = ?,
-      verified_at = ?, verification_result = ?, failure_reason = ?,
-      failure_classification = ?, recovery_attempts = ?, updated_at = ?, payload = ?
-    WHERE id = ?
-  `).run(
-    String(record.state), record.commit_reference ?? null, record.executed_at ?? null,
-    record.committed_at ?? null, record.verified_at ?? null,
-    record.verification_result === null ? null : json(record.verification_result),
-    record.failure_reason ?? null, record.failure_classification ?? null,
-    Number(record.recovery_attempts ?? 0), String(record.updated_at), json(record), String(record.id),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      UPDATE execution_records SET
+        state = ?, commit_reference = ?, executed_at = ?, committed_at = ?,
+        verified_at = ?, verification_result = ?, failure_reason = ?,
+        failure_classification = ?, recovery_attempts = ?, updated_at = ?, payload = ?
+      WHERE id = ?
+    `).run(
+      String(record.state), record.commit_reference ?? null, record.executed_at ?? null,
+      record.committed_at ?? null, record.verified_at ?? null,
+      record.verification_result === null ? null : json(record.verification_result),
+      record.failure_reason ?? null, record.failure_classification ?? null,
+      Number(record.recovery_attempts ?? 0), String(record.updated_at), json(record), String(record.id),
+    );
+  });
 }
 
 export function readExecutions(): Row[] {
@@ -81,7 +85,9 @@ export function readExecutions(): Row[] {
 }
 
 export function clearExecutions(): void {
-  getDatabase().exec('DELETE FROM execution_records');
+  withWriteTransaction(() => {
+    getDatabase().exec('DELETE FROM execution_records');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -89,19 +95,21 @@ export function clearExecutions(): void {
 // ---------------------------------------------------------------------------
 
 export function insertReconciliationOutcome(outcome: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO reconciliation_outcomes(
-      id, organization_id, bank_transaction_id, original_confidence,
-      original_match_method, action_type, outcome, final_invoice_ids,
-      reviewed_by_user_id, rejection_reason, reviewed_at, created_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(outcome.id), String(outcome.organizationId), String(outcome.bankTransactionId),
-    Number(outcome.originalConfidence), String(outcome.originalMatchMethod),
-    String(outcome.actionType), String(outcome.outcome), json(outcome.finalInvoiceIds ?? []),
-    outcome.reviewedByUserId ?? null, outcome.rejectionReason ?? null,
-    String(outcome.reviewedAt), String(outcome.created_at), json(outcome),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO reconciliation_outcomes(
+        id, organization_id, bank_transaction_id, original_confidence,
+        original_match_method, action_type, outcome, final_invoice_ids,
+        reviewed_by_user_id, rejection_reason, reviewed_at, created_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(outcome.id), String(outcome.organizationId), String(outcome.bankTransactionId),
+      Number(outcome.originalConfidence), String(outcome.originalMatchMethod),
+      String(outcome.actionType), String(outcome.outcome), json(outcome.finalInvoiceIds ?? []),
+      outcome.reviewedByUserId ?? null, outcome.rejectionReason ?? null,
+      String(outcome.reviewedAt), String(outcome.created_at), json(outcome),
+    );
+  });
 }
 
 export function readReconciliationOutcomes(): Row[] {
@@ -110,7 +118,9 @@ export function readReconciliationOutcomes(): Row[] {
 }
 
 export function clearReconciliationOutcomes(): void {
-  getDatabase().exec('DELETE FROM reconciliation_outcomes');
+  withWriteTransaction(() => {
+    getDatabase().exec('DELETE FROM reconciliation_outcomes');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -118,53 +128,61 @@ export function clearReconciliationOutcomes(): void {
 // ---------------------------------------------------------------------------
 
 export function insertImportBatch(batch: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO import_batches(
-      id, organization_id, source_system, status, date_format_convention,
-      total_rows, success_count, skipped_count, started_at, completed_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(batch.id), String(batch.organization_id), String(batch.source_system),
-    String(batch.status), String(batch.date_format_convention),
-    Number(batch.total_rows), Number(batch.success_count), Number(batch.skipped_count),
-    String(batch.started_at), batch.completed_at ?? null, json(batch),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO import_batches(
+        id, organization_id, source_system, status, date_format_convention,
+        total_rows, success_count, skipped_count, started_at, completed_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(batch.id), String(batch.organization_id), String(batch.source_system),
+      String(batch.status), String(batch.date_format_convention),
+      Number(batch.total_rows), Number(batch.success_count), Number(batch.skipped_count),
+      String(batch.started_at), batch.completed_at ?? null, json(batch),
+    );
+  });
 }
 
 export function updateImportBatch(batch: Row): void {
-  getDatabase().prepare(`
-    UPDATE import_batches SET
-      status = ?, success_count = ?, skipped_count = ?, completed_at = ?, payload = ?
-    WHERE id = ?
-  `).run(
-    String(batch.status), Number(batch.success_count), Number(batch.skipped_count),
-    batch.completed_at ?? null, json(batch), String(batch.id),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      UPDATE import_batches SET
+        status = ?, success_count = ?, skipped_count = ?, completed_at = ?, payload = ?
+      WHERE id = ?
+    `).run(
+      String(batch.status), Number(batch.success_count), Number(batch.skipped_count),
+      batch.completed_at ?? null, json(batch), String(batch.id),
+    );
+  });
 }
 
 export function insertImportError(record: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO import_errors(
-      id, organization_id, import_batch_id, raw_row_reference, reason, field, created_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(record.id), String(record.organization_id), String(record.import_batch_id),
-    json(record.raw_row_reference ?? {}), String(record.reason), record.field ?? null,
-    String(record.created_at), json(record),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO import_errors(
+        id, organization_id, import_batch_id, raw_row_reference, reason, field, created_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(record.id), String(record.organization_id), String(record.import_batch_id),
+      json(record.raw_row_reference ?? {}), String(record.reason), record.field ?? null,
+      String(record.created_at), json(record),
+    );
+  });
 }
 
 export function insertImportDuplicate(record: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO import_duplicates(
-      id, organization_id, import_batch_id, incoming_record_json,
-      existing_record_id, confidence, status, created_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(record.id), String(record.organization_id), String(record.import_batch_id),
-    json(record.incoming_record_json ?? {}), String(record.existing_record_id),
-    Number(record.confidence), String(record.status), String(record.created_at), json(record),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO import_duplicates(
+        id, organization_id, import_batch_id, incoming_record_json,
+        existing_record_id, confidence, status, created_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(record.id), String(record.organization_id), String(record.import_batch_id),
+      json(record.incoming_record_json ?? {}), String(record.existing_record_id),
+      Number(record.confidence), String(record.status), String(record.created_at), json(record),
+    );
+  });
 }
 
 export function readImportState(): { batches: Row[]; errors: Row[]; duplicates: Row[] } {
@@ -180,10 +198,12 @@ export function readImportState(): { batches: Row[]; errors: Row[]; duplicates: 
 }
 
 export function clearImportState(): void {
-  const db = getDatabase();
-  db.exec('DELETE FROM import_duplicates');
-  db.exec('DELETE FROM import_errors');
-  db.exec('DELETE FROM import_batches');
+  withWriteTransaction(() => {
+    const db = getDatabase();
+    db.exec('DELETE FROM import_duplicates');
+    db.exec('DELETE FROM import_errors');
+    db.exec('DELETE FROM import_batches');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -191,57 +211,65 @@ export function clearImportState(): void {
 // ---------------------------------------------------------------------------
 
 export function insertAuthUser(user: Row): boolean {
-  const result = getDatabase().prepare(`
-    INSERT INTO auth_users(
-      id, auth_provider_id, email, email_normalized, first_name, last_name,
-      phone, role_title, email_verified, created_at, updated_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(email_normalized) DO NOTHING
-  `).run(
-    String(user.id), String(user.auth_provider_id), String(user.email),
-    String(user.email).toLowerCase(), String(user.first_name), String(user.last_name),
-    user.phone ?? null, user.role_title ?? null, user.email_verified ? 1 : 0,
-    String(user.created_at), String(user.updated_at), json(user),
-  );
-  return Number((result as { changes?: number | bigint }).changes ?? 0) === 1;
+  return withWriteTransaction(() => {
+    const result = getDatabase().prepare(`
+      INSERT INTO auth_users(
+        id, auth_provider_id, email, email_normalized, first_name, last_name,
+        phone, role_title, email_verified, created_at, updated_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(email_normalized) DO NOTHING
+    `).run(
+      String(user.id), String(user.auth_provider_id), String(user.email),
+      String(user.email).toLowerCase(), String(user.first_name), String(user.last_name),
+      user.phone ?? null, user.role_title ?? null, user.email_verified ? 1 : 0,
+      String(user.created_at), String(user.updated_at), json(user),
+    );
+    return Number((result as { changes?: number | bigint }).changes ?? 0) === 1;
+  });
 }
 
 export function updateAuthUser(user: Row): void {
-  getDatabase().prepare(`
-    UPDATE auth_users SET
-      email = ?, email_normalized = ?, first_name = ?, last_name = ?, phone = ?,
-      role_title = ?, email_verified = ?, updated_at = ?, payload = ?
-    WHERE id = ?
-  `).run(
-    String(user.email), String(user.email).toLowerCase(), String(user.first_name),
-    String(user.last_name), user.phone ?? null, user.role_title ?? null,
-    user.email_verified ? 1 : 0, String(user.updated_at), json(user), String(user.id),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      UPDATE auth_users SET
+        email = ?, email_normalized = ?, first_name = ?, last_name = ?, phone = ?,
+        role_title = ?, email_verified = ?, updated_at = ?, payload = ?
+      WHERE id = ?
+    `).run(
+      String(user.email), String(user.email).toLowerCase(), String(user.first_name),
+      String(user.last_name), user.phone ?? null, user.role_title ?? null,
+      user.email_verified ? 1 : 0, String(user.updated_at), json(user), String(user.id),
+    );
+  });
 }
 
 export function insertAuthOrganization(org: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO auth_organizations(
-      id, name, size, industry, created_by_user_id, pilot_mode, currency,
-      created_at, updated_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(org.id), String(org.name), String(org.size), String(org.industry),
-    String(org.created_by_user_id), org.pilotMode ? 1 : 0, org.currency ?? null,
-    String(org.created_at), String(org.updated_at), json(org),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO auth_organizations(
+        id, name, size, industry, created_by_user_id, pilot_mode, currency,
+        created_at, updated_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(org.id), String(org.name), String(org.size), String(org.industry),
+      String(org.created_by_user_id), org.pilotMode ? 1 : 0, org.currency ?? null,
+      String(org.created_at), String(org.updated_at), json(org),
+    );
+  });
 }
 
 export function updateAuthOrganization(org: Row): void {
-  getDatabase().prepare(`
-    UPDATE auth_organizations SET
-      name = ?, size = ?, industry = ?, pilot_mode = ?, currency = ?,
-      updated_at = ?, payload = ?
-    WHERE id = ?
-  `).run(
-    String(org.name), String(org.size), String(org.industry), org.pilotMode ? 1 : 0,
-    org.currency ?? null, String(org.updated_at), json(org), String(org.id),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      UPDATE auth_organizations SET
+        name = ?, size = ?, industry = ?, pilot_mode = ?, currency = ?,
+        updated_at = ?, payload = ?
+      WHERE id = ?
+    `).run(
+      String(org.name), String(org.size), String(org.industry), org.pilotMode ? 1 : 0,
+      org.currency ?? null, String(org.updated_at), json(org), String(org.id),
+    );
+  });
 }
 
 export function readAuthState(): { users: Row[]; organizations: Row[] } {
@@ -255,16 +283,20 @@ export function readAuthState(): { users: Row[]; organizations: Row[] } {
 }
 
 export function clearAuthState(): void {
-  const db = getDatabase();
-  db.exec('DELETE FROM auth_users');
-  db.exec('DELETE FROM auth_organizations');
+  withWriteTransaction(() => {
+    const db = getDatabase();
+    db.exec('DELETE FROM auth_users');
+    db.exec('DELETE FROM auth_organizations');
+  });
 }
 
 export function insertRevokedSession(jti: string, exp: number): void {
-  getDatabase().prepare(`
-    INSERT INTO auth_session_revocations(jti, exp) VALUES (?, ?)
-    ON CONFLICT(jti) DO UPDATE SET exp = excluded.exp
-  `).run(jti, exp);
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO auth_session_revocations(jti, exp) VALUES (?, ?)
+      ON CONFLICT(jti) DO UPDATE SET exp = excluded.exp
+    `).run(jti, exp);
+  });
 }
 
 export function readRevokedSessions(): Array<{ jti: string; exp: number }> {
@@ -272,40 +304,52 @@ export function readRevokedSessions(): Array<{ jti: string; exp: number }> {
 }
 
 export function deleteExpiredRevokedSessions(nowEpochSeconds: number): void {
-  getDatabase().prepare('DELETE FROM auth_session_revocations WHERE exp <= ?').run(nowEpochSeconds);
+  withWriteTransaction(() => {
+    getDatabase().prepare('DELETE FROM auth_session_revocations WHERE exp <= ?').run(nowEpochSeconds);
+  });
 }
 
 export function clearRevokedSessions(): void {
-  getDatabase().exec('DELETE FROM auth_session_revocations');
+  withWriteTransaction(() => {
+    getDatabase().exec('DELETE FROM auth_session_revocations');
+  });
 }
 
 export function insertTenantMember(member: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO tenant_members(id, user_id, organization_id, role, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(String(member.id), String(member.user_id), String(member.organization_id), String(member.role), String(member.created_at));
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO tenant_members(id, user_id, organization_id, role, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(String(member.id), String(member.user_id), String(member.organization_id), String(member.role), String(member.created_at));
+  });
 }
 
 export function updateTenantMemberRole(id: string, role: string): void {
-  getDatabase().prepare('UPDATE tenant_members SET role = ? WHERE id = ?').run(role, id);
+  withWriteTransaction(() => {
+    getDatabase().prepare('UPDATE tenant_members SET role = ? WHERE id = ?').run(role, id);
+  });
 }
 
 export function insertTenantInvite(invite: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO tenant_invites(
-      id, organization_id, email, role, invited_by_user_id, status, token, created_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(invite.id), String(invite.organization_id), String(invite.email),
-    String(invite.role), String(invite.invited_by_user_id), String(invite.status),
-    String(invite.token), String(invite.created_at), json(invite),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO tenant_invites(
+        id, organization_id, email, role, invited_by_user_id, status, token, created_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(invite.id), String(invite.organization_id), String(invite.email),
+      String(invite.role), String(invite.invited_by_user_id), String(invite.status),
+      String(invite.token), String(invite.created_at), json(invite),
+    );
+  });
 }
 
 export function insertTenantRecord(tableName: string, record: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO tenant_records(table_name, id, organization_id, payload) VALUES (?, ?, ?, ?)
-  `).run(tableName, String(record.id), String(record.organization_id), json(record));
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO tenant_records(table_name, id, organization_id, payload) VALUES (?, ?, ?, ?)
+    `).run(tableName, String(record.id), String(record.organization_id), json(record));
+  });
 }
 
 export function readTenantState(): {
@@ -327,10 +371,12 @@ export function readTenantState(): {
 }
 
 export function clearTenantState(): void {
-  const db = getDatabase();
-  db.exec('DELETE FROM tenant_records');
-  db.exec('DELETE FROM tenant_invites');
-  db.exec('DELETE FROM tenant_members');
+  withWriteTransaction(() => {
+    const db = getDatabase();
+    db.exec('DELETE FROM tenant_records');
+    db.exec('DELETE FROM tenant_invites');
+    db.exec('DELETE FROM tenant_members');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -338,64 +384,74 @@ export function clearTenantState(): void {
 // ---------------------------------------------------------------------------
 
 export function insertBillingUsageEvent(event: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO billing_usage_events(
-      id, organization_id, event_type, quantity, metadata, occurred_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(event.id), String(event.organization_id), String(event.event_type),
-    Number(event.quantity), event.metadata == null ? null : json(event.metadata),
-    String(event.occurred_at), json(event),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO billing_usage_events(
+        id, organization_id, event_type, quantity, metadata, occurred_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(event.id), String(event.organization_id), String(event.event_type),
+      Number(event.quantity), event.metadata == null ? null : json(event.metadata),
+      String(event.occurred_at), json(event),
+    );
+  });
 }
 
 export function insertBillingPayment(payment: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO billing_payments(
-      id, organization_id, provider_payment_id, amount_minor_units,
-      currency, status, refunded_amount_minor_units, date, created_at, updated_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(payment.id), String(payment.organization_id), String(payment.provider_payment_id),
-    Number(payment.amount_minor_units), String(payment.currency), String(payment.status),
-    Number(payment.refunded_amount_minor_units ?? 0), String(payment.date),
-    String(payment.created_at), String(payment.updated_at), json(payment),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO billing_payments(
+        id, organization_id, provider_payment_id, amount_minor_units,
+        currency, status, refunded_amount_minor_units, date, created_at, updated_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(payment.id), String(payment.organization_id), String(payment.provider_payment_id),
+      Number(payment.amount_minor_units), String(payment.currency), String(payment.status),
+      Number(payment.refunded_amount_minor_units ?? 0), String(payment.date),
+      String(payment.created_at), String(payment.updated_at), json(payment),
+    );
+  });
 }
 
 export function insertBillingWebhookEvent(event: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO billing_webhook_events(
-      provider_event_id, id, organization_id, event_type, status,
-      retry_count, max_retries, error_message, created_at, updated_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(event.provider_event_id), String(event.id), String(event.organization_id),
-    String(event.event_type), String(event.status), Number(event.retry_count),
-    Number(event.max_retries), event.error_message ?? null,
-    String(event.created_at), String(event.updated_at), json(event),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO billing_webhook_events(
+        provider_event_id, id, organization_id, event_type, status,
+        retry_count, max_retries, error_message, created_at, updated_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(event.provider_event_id), String(event.id), String(event.organization_id),
+      String(event.event_type), String(event.status), Number(event.retry_count),
+      Number(event.max_retries), event.error_message ?? null,
+      String(event.created_at), String(event.updated_at), json(event),
+    );
+  });
 }
 
 export function updateBillingWebhookStatus(providerEventId: string, status: string, updatedAt: string): void {
-  getDatabase().prepare(`
-    UPDATE billing_webhook_events
-    SET status = ?, updated_at = ?, payload = json_set(payload, '$.status', ?, '$.updated_at', ?)
-    WHERE provider_event_id = ?
-  `).run(status, updatedAt, status, updatedAt, providerEventId);
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      UPDATE billing_webhook_events
+      SET status = ?, updated_at = ?, payload = json_set(payload, '$.status', ?, '$.updated_at', ?)
+      WHERE provider_event_id = ?
+    `).run(status, updatedAt, status, updatedAt, providerEventId);
+  });
 }
 
 export function insertBillingRefundEvent(refund: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO billing_refund_events(
-      id, organization_id, provider_refund_id, payment_id,
-      amount_minor_units, currency, status, created_at, updated_at, payload
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(refund.id), String(refund.organization_id), String(refund.provider_refund_id),
-    String(refund.payment_id), Number(refund.amount_minor_units), String(refund.currency),
-    String(refund.status), String(refund.created_at), String(refund.updated_at), json(refund),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO billing_refund_events(
+        id, organization_id, provider_refund_id, payment_id,
+        amount_minor_units, currency, status, created_at, updated_at, payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(refund.id), String(refund.organization_id), String(refund.provider_refund_id),
+      String(refund.payment_id), Number(refund.amount_minor_units), String(refund.currency),
+      String(refund.status), String(refund.created_at), String(refund.updated_at), json(refund),
+    );
+  });
 }
 
 export function readBillingOperationalState(): {
@@ -418,27 +474,31 @@ export function readBillingOperationalState(): {
 }
 
 export function clearBillingOperationalState(): void {
-  const db = getDatabase();
-  db.exec('DELETE FROM billing_refund_events');
-  db.exec('DELETE FROM billing_webhook_events');
-  db.exec('DELETE FROM billing_payments');
-  db.exec('DELETE FROM billing_usage_events');
-  db.exec('DELETE FROM billing_event_log');
+  withWriteTransaction(() => {
+    const db = getDatabase();
+    db.exec('DELETE FROM billing_refund_events');
+    db.exec('DELETE FROM billing_webhook_events');
+    db.exec('DELETE FROM billing_payments');
+    db.exec('DELETE FROM billing_usage_events');
+    db.exec('DELETE FROM billing_event_log');
+  });
 }
 
 export function insertBillingEventLog(event: Row): void {
-  getDatabase().prepare(`
-    INSERT INTO billing_event_log(
-      id, organization_id, razorpay_event_id, event_type,
-      razorpay_subscription_id, razorpay_payment_id, payload,
-      signature_verified, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    String(event.id), String(event.organization_id), event.razorpay_event_id ?? null,
-    String(event.event_type), event.razorpay_subscription_id ?? null,
-    event.razorpay_payment_id ?? null, json(event.payload ?? {}),
-    event.signature_verified ? 1 : 0, String(event.created_at),
-  );
+  withWriteTransaction(() => {
+    getDatabase().prepare(`
+      INSERT INTO billing_event_log(
+        id, organization_id, razorpay_event_id, event_type,
+        razorpay_subscription_id, razorpay_payment_id, payload,
+        signature_verified, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(event.id), String(event.organization_id), event.razorpay_event_id ?? null,
+      String(event.event_type), event.razorpay_subscription_id ?? null,
+      event.razorpay_payment_id ?? null, json(event.payload ?? {}),
+      event.signature_verified ? 1 : 0, String(event.created_at),
+    );
+  });
 }
 
 export function readBillingEventLog(): Row[] {
