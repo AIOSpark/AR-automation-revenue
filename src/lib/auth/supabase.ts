@@ -1,17 +1,51 @@
 // Supabase Managed Auth Client & Operations
+// Validated at startup — rejects placeholder/configured credentials
 
 import { createClient } from "@supabase/supabase-js";
 import { AUTH_CONFIG } from "./config";
 import { authStore, UserRecord, OrganizationRecord } from "./store";
 import { trackAuthFunnelEvent } from "./analytics";
 import { createSessionToken, verifySessionToken } from "./session";
-import { isAuthProviderConfigured, isDevAuthEnabled } from "./dev-mode";
+import { isAuthProviderConfigured, isDevAuthEnabled, getAuthSigningSecret } from "./dev-mode";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
-// Prefer publishable key (modern Supabase); fall back to legacy anon key
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+// Validate Supabase credentials at module load time
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const supabaseLegacyKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Reject placeholder credentials that indicate misconfiguration
+const REJECTED_SUPABASE_URL = "https://placeholder-project.supabase.co";
+const REJECTED_SUPABASE_KEY = "placeholder-anon-key";
+
+if (!supabaseUrl) {
+  console.error("[FATAL] NEXT_PUBLIC_SUPABASE_URL is not set");
+  process.exit(1);
+}
+
+if (supabaseUrl.includes("placeholder")) {
+  console.error(`[FATAL] NEXT_PUBLIC_SUPABASE_URL contains placeholder value: ${supabaseUrl}`);
+  process.exit(1);
+}
+
+if (!supabasePublishableKey && !supabaseLegacyKey) {
+  console.error("[FATAL] No Supabase anon/publishable key configured");
+  process.exit(1);
+}
+
+if (supabasePublishableKey && supabasePublishableKey.includes("placeholder")) {
+  console.error("[FATAL] NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY contains placeholder value");
+  process.exit(1);
+}
+
+if (supabaseLegacyKey && supabaseLegacyKey.includes("placeholder")) {
+  console.error("[FATAL] NEXT_PUBLIC_SUPABASE_ANON_KEY contains placeholder value");
+  process.exit(1);
+}
+
+// Safe to create client after validation
+// Type assertion: validation above guarantees at least one key is set
+const resolvedKey = supabasePublishableKey || supabaseLegacyKey as string;
+export const supabase = createClient(supabaseUrl, resolvedKey);
 export interface SignupInput {
   first_name: string;
   last_name: string;

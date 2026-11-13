@@ -2,6 +2,7 @@
 // Automatically evaluates pending promises against payments and handles edge cases/grace periods.
 
 import { udmStore } from '../udm/store';
+import { pool } from '../db/postgres';
 import { promiseStore, PaymentPromise } from './store';
 import { runCollectionsAgent } from '../agents/collections-agent';
 
@@ -15,9 +16,7 @@ export interface PromiseCheckJobResult {
 }
 
 export class PromiseCheckJob {
-  /**
-   * Primary Daily Scheduled Job Entry Point
-   */
+  /** Primary Daily Scheduled Job Entry Point */
   public static async runDailyCheck(
     orgId: string,
     todayStr?: string
@@ -31,7 +30,6 @@ export class PromiseCheckJob {
     const allPromises = promiseStore.getPromises(orgId);
     const allPayments = udmStore.getPayments();
     const allMatches = udmStore.getMatches();
-    const claimedPaymentIds = new Set<string>();
 
     let evaluatedCount = 0;
     let keptCount = 0;
@@ -55,31 +53,71 @@ export class PromiseCheckJob {
       let matchedByInvoice = false;
       let matchedByAmountOnly = false;
 
+      // Phase 1: Build claim keys and check existing claims against udm_idempotency_keys
+      const invoiceClaimKeys = allMatches
+        .filter((m) => m.invoice_id === promise.invoice_id)
+        .map((m) => `${orgId}:payment_claim:${m.payment_id}`);
+
+      const allClaimKeys = [...invoiceClaimKeys, ...custPayments.map((p) => `${orgId}:payment_claim:${p.id}`)];
+      const claimCheckResults = await Promise.all(
+        allClaimKeys.map((key) => 
+          pool.query('SELECT 1 AS present FROM udm_idempotency_keys WHERE organization_id = $1 AND key = $2 LIMIT 1', [orgId, key])
+        )
+      );
+      // Map each key to boolean: true if claim exists
+      const claimedMap: Record<string, boolean> = {};
+      claimCheckResults.forEach((result, i) => {
+        claimedMap[allClaimKeys[i]] = result.rows.length > 0;
+      })
+
+      // Phase 2: Filter matches, skipping claimed keys
+      let filteredInvMatches: any[] = [];
       if (promise.invoice_id) {
-        // Invoice specified: sum matches against this specific invoice
-        const invMatches = allMatches.filter((m) => {
-          if (m.invoice_id !== promise.invoice_id || claimedPaymentIds.has(m.payment_id)) return false;
-          const payment = allPayments.find((candidate) => candidate.id === m.payment_id);
-          return Boolean(payment && new Date(payment.created_at).getTime() >= promiseCreatedMs);
-        });
-        totalReceivedForPromise = invMatches.reduce((sum, m) => sum + m.matched_amount_minor_units, 0);
-        invMatches.forEach((match) => claimedPaymentIds.add(match.payment_id));
-        if (totalReceivedForPromise > 0) matchedByInvoice = true;
-      } else {
-        // No invoice specified: check customer payments around amount
-        const availablePayments = custPayments.filter((payment) => !claimedPaymentIds.has(payment.id));
-        if (availablePayments.length > 0) {
-          const matchingPayment = availablePayments.find(
-            (p) => Math.abs(p.amount_minor_units - promise.promised_amount_minor_units) <= promise.promised_amount_minor_units * 0.05
+        filteredInvMatches = allMatches.filter((m) => m.invoice_id === promise.invoice_id);
+        // Filter out claimed keys
+        filteredInvMatches = filteredInvMatches.filter((m) => !claimedMap[`${orgId}:payment_claim:${m.payment_id}`]);
+        totalReceivedForPromise = filteredInvMatches.reduce((sum, m) => sum + (m.matched_amount_minor_units ?? 0), 0);
+        // Atomically reserve payment keys for filtered invoice matches
+        const invoiceClaimPromises = filteredInvMatches.map((match) => {
+          const claimKey = `${orgId}:payment_claim:${match.payment_id}`;
+          return pool.query(
+            'INSERT INTO udm_idempotency_keys(organization_id, key, record_id) VALUES ($1, $2, $3) ON CONFLICT (organization_id, key) DO NOTHING',
+            [orgId, claimKey, `res_${Date.now()}`]
           );
-          if (matchingPayment) {
-            totalReceivedForPromise = matchingPayment.amount_minor_units;
-            claimedPaymentIds.add(matchingPayment.id);
-            matchedByAmountOnly = true;
-          } else {
-            totalReceivedForPromise = availablePayments.reduce((sum, p) => sum + p.amount_minor_units, 0);
-            availablePayments.forEach((payment) => claimedPaymentIds.add(payment.id));
-          }
+        });
+        await Promise.all(invoiceClaimPromises);
+        if (totalReceivedForPromise > 0) matchedByInvoice = true;
+      }
+
+      // No invoice specified: filter customer payments, skipping claimed keys
+      const availablePayments = custPayments.filter((payment) => {
+        const key = `${orgId}:payment_claim:${payment.id}`;
+        return !(claimedMap[key] === true);
+      });
+      if (availablePayments.length > 0) {
+        const matchingPayment = availablePayments.find(
+          (p) => Math.abs(p.amount_minor_units - promise.promised_amount_minor_units) <= promise.promised_amount_minor_units * 0.05
+        );
+        if (matchingPayment) {
+          totalReceivedForPromise = matchingPayment.amount_minor_units;
+          // Atomically reserve this payment key
+          const claimKey = `${orgId}:payment_claim:${matchingPayment.id}`;
+          await pool.query(
+            'INSERT INTO udm_idempotency_keys(organization_id, key, record_id) VALUES ($1, $2, $3) ON CONFLICT (organization_id, key) DO NOTHING',
+            [orgId, claimKey, `res_${Date.now()}`]
+          );
+          matchedByAmountOnly = true;
+        } else {
+          totalReceivedForPromise = availablePayments.reduce((sum, p) => sum + p.amount_minor_units, 0);
+          // Atomically reserve payment keys for remaining customer payments
+          const customerClaimPromises = availablePayments.map((payment) => {
+            const claimKey = `${orgId}:payment_claim:${payment.id}`;
+            return pool.query(
+              'INSERT INTO udm_idempotency_keys(organization_id, key, record_id) VALUES ($1, $2, $3) ON CONFLICT (organization_id, key) DO NOTHING',
+              [orgId, claimKey, `res_${Date.now()}`]
+            );
+          });
+          await Promise.all(customerClaimPromises);
         }
       }
 

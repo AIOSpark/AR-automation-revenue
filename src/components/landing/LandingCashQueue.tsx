@@ -108,10 +108,10 @@ export function LandingCashQueue() {
     >
       <div
         aria-hidden="true"
-        className="absolute top-[10%] right-[-6%] w-[500px] h-[500px] rounded-full pointer-events-none"
+        className="absolute top-[8%] right-[-6%] w-[400px] h-[400px] rounded-full pointer-events-none"
         style={{
-          background: "radial-gradient(circle, rgba(215,25,32,0.06) 0%, transparent 70%)",
-          filter: "blur(90px)",
+          background: "radial-gradient(circle, rgba(215,25,32,0.05) 0%, transparent 70%)",
+          filter: "blur(80px)",
         }}
       />
 
@@ -123,7 +123,7 @@ export function LandingCashQueue() {
             <div
               data-reveal
               id="cq-eyebrow"
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.12] text-[12px] font-mono text-neutral-300 uppercase tracking-wider ${isRev("cq-eyebrow") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"}`}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.12] text-[12px] font-mono text-neutral-300 uppercase tracking-wider"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#D7192D] animate-pulse" />
               <span>CASH UNBLOCK QUEUE</span>
@@ -132,7 +132,7 @@ export function LandingCashQueue() {
             <h2
               data-reveal
               id="cq-headline"
-              className={`pt-1 font-bold text-white tracking-[-0.04em] ${isRev("cq-headline") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
+              className="pt-1 font-bold text-white tracking-[-0.04em]"
               style={{ fontSize: "clamp(2rem, 3.4vw, 3rem)", lineHeight: "1.15" }}
             >
               Don't manage invoices.
@@ -142,7 +142,7 @@ export function LandingCashQueue() {
             <p
               data-reveal
               id="cq-subtext"
-              className={`text-neutral-300 text-base lg:text-[17px] leading-relaxed max-w-lg ${isRev("cq-subtext") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"}`}
+              className="text-neutral-300 text-base lg:text-[17px] leading-relaxed max-w-lg"
             >
               Most collections software ranks simply by days overdue or invoice number. AIOSpark ranks by recoverable money at risk and probability of recovery — focusing team effort where it delivers the highest return.
             </p>
@@ -151,12 +151,12 @@ export function LandingCashQueue() {
             <div
               data-reveal
               id="cq-total-card"
-              className={`p-6 rounded-2xl bg-white/[0.03] border border-white/[0.09] space-y-2 ${isRev("cq-total-card") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"}`}
+              className="p-6 rounded-2xl bg-white/[0.03] border border-white/[0.09] space-y-2"
             >
               <span className="text-[12px] font-mono text-neutral-400 uppercase tracking-wider block">
                 Total Money At Risk In Queue
               </span>
-              <div className="text-3xl sm:text-4xl font-extrabold text-white tabular-nums tracking-tight">
+              <div className="text-2xl sm:text-3xl font-extrabold text-white tabular-nums tracking-tight">
                 {totalDisplay}
               </div>
               <div className="text-[13px] text-neutral-400 pt-1 flex items-center gap-1.5">
@@ -166,12 +166,12 @@ export function LandingCashQueue() {
             </div>
           </div>
 
-          {/* RIGHT: 60% RECOVERY QUEUE CARDS (HARD-CAPPED ~560PX) */}
+          {/* RIGHT: QUEUE CARDS AREA */}
           <div className="lg:col-span-7 w-full">
             <div
               data-reveal
               id="cq-queue-panel"
-              className={`rounded-2xl bg-[#090A0D] border border-white/[0.10] p-6 sm:p-7 shadow-2xl max-h-[560px] flex flex-col justify-between ${isRev("cq-queue-panel") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"}`}
+              className="rounded-2xl bg-[#090A0D] border border-white/[0.10] p-6 sm:p-7 shadow-lg max-w-full flex flex-col justify-between"
             >
               <div>
                 {/* Header & Filter */}
@@ -188,20 +188,20 @@ export function LandingCashQueue() {
                   <div className="flex items-center gap-1.5 p-1 rounded-lg bg-white/[0.04] border border-white/[0.08]">
                     <button
                       onClick={() => setFilter("ALL")}
-                      className={`min-h-[36px] px-3 py-1 rounded text-[12px] font-medium transition-all cursor-pointer ${filter === "ALL" ? "bg-white/[0.12] text-white font-semibold" : "text-neutral-400 hover:text-white"}`}
+                      className="min-h-[36px] px-3 py-1 rounded text-[12px] font-medium transition-all cursor-pointer"
                     >
                       All (4)
                     </button>
                     <button
                       onClick={() => setFilter("HIGH")}
-                      className={`min-h-[36px] px-3 py-1 rounded text-[12px] font-medium transition-all cursor-pointer ${filter === "HIGH" ? "bg-[#D7192D]/20 text-[#D7192D] font-semibold border border-[#D7192D]/30" : "text-neutral-400 hover:text-white"}`}
+                      className="min-h-[36px] px-3 py-1 rounded text-[12px] font-medium transition-all cursor-pointer"
                     >
                       High Risk (2)
                     </button>
                   </div>
                 </div>
 
-                {/* Queue Card Stack: Maximum 3-4 cards visible */}
+                {/* Queue Card Stack */}
                 <div className="space-y-3">
                   {displayedItems.map((item) => {
                     const isHigh = item.priority === "HIGH";
@@ -213,7 +213,11 @@ export function LandingCashQueue() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span
-                              className={`px-2 py-0.5 rounded text-[12px] font-mono font-bold uppercase ${isHigh ? "bg-[#D7192D]/15 text-[#D7192D] border border-[#D7192D]/30" : "bg-amber-500/15 text-amber-400 border border-amber-500/30"}`}
+                              className={
+                                isHigh
+                                  ? "px-2 py-0.5 rounded text-[12px] font-mono font-bold uppercase bg-[#D7192D]/15 text-[#D7192D] border border-[#D7192D]/30"
+                                  : "px-2 py-0.5 rounded text-[12px] font-mono font-bold uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                              }
                             >
                               {item.priority}
                             </span>
@@ -242,7 +246,9 @@ export function LandingCashQueue() {
                             </div>
                           </div>
 
-                          <button className="min-h-[40px] px-3.5 py-2 rounded-lg bg-white/[0.06] hover:bg-[#D7192D] text-white hover:text-white border border-white/[0.12] hover:border-[#D7192D] text-[12px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer">
+                          <button
+                            className="min-h-[40px] px-3.5 py-2 rounded-lg bg-white/[0.06] hover:bg-[#D7192D] text-white hover:text-white border border-white/[0.12] hover:border-[#D7192D] text-[12px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                          >
                             <span>{item.action}</span>
                             <ArrowRight className="w-3 h-3" />
                           </button>

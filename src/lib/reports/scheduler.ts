@@ -16,8 +16,11 @@ export interface ReportScheduleRecord {
   recipients: string[]; // Email addresses
   cadence: ScheduleCadence;
   created_by_user_id: string;
+  status?: 'active' | 'paused' | 'disabled';
   last_run_at?: string | null;
   next_run_at?: string | null;
+  run_count?: number;
+  max_runs?: number;
   created_at: string;
   updated_at: string;
 }

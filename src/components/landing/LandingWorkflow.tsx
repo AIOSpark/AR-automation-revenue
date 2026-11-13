@@ -101,10 +101,10 @@ export function LandingWorkflow({ onOpenWaitlist }: LandingWorkflowProps) {
     >
       <div
         aria-hidden="true"
-        className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full pointer-events-none"
+        className="absolute top-[-8%] right-[-8%] w-[500px] h-[500px] rounded-full pointer-events-none"
         style={{
-          background: "radial-gradient(circle, rgba(215,25,32,0.06) 0%, transparent 70%)",
-          filter: "blur(90px)",
+          background: "radial-gradient(circle, rgba(215,25,32,0.05) 0%, transparent 70%)",
+          filter: "blur(80px)",
         }}
       />
 
@@ -147,11 +147,11 @@ export function LandingWorkflow({ onOpenWaitlist }: LandingWorkflowProps) {
           className={`hidden lg:block relative ${isRev("wf-stepper") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"}`}
         >
           {/* Connecting Base Line */}
-          <div className="absolute top-[28px] left-[10%] right-[10%] h-[2px] bg-white/[0.10] z-0" />
+          <div className="absolute top-[26px] left-[8%] right-[8%] h-[2px] bg-white/[0.10] z-0" />
 
           {/* Animated Scroll Fill Line */}
           <div
-            className="absolute top-[28px] left-[10%] h-[2px] bg-gradient-to-r from-[#D7192D] via-[#D7192D] to-red-400 z-0 transition-all duration-300"
+            className="absolute top-[26px] left-[8%] h-[2px] bg-gradient-to-r from-[#D7192D] via-[#D7192D] to-red-400 z-0 transition-all duration-300"
             style={{ width: `${Math.min(80, Math.max(0, scrollProgress * 0.8))}%` }}
           />
 
@@ -180,7 +180,7 @@ export function LandingWorkflow({ onOpenWaitlist }: LandingWorkflowProps) {
                     <span className="text-[12px] font-mono text-neutral-400 font-bold block">
                       STEP {step.num}
                     </span>
-                    <h3 className={`text-base font-bold transition-colors ${isActive ? "text-[#D7192D]" : "text-white group-hover:text-neutral-200"}`}>
+                    <h3 className={`text-base font-bold transition-colors ${isActive ? "text-[#D7192D]" : "text-white"} group-hover:text-neutral-200`}>
                       {step.title}
                     </h3>
                     <p className="text-[13px] text-neutral-400 leading-snug">
@@ -218,9 +218,9 @@ export function LandingWorkflow({ onOpenWaitlist }: LandingWorkflowProps) {
         <div className="lg:hidden space-y-4">
           <div className="relative pl-6">
             {/* Vertical connector line */}
-            <div className="absolute left-[19px] top-4 bottom-4 w-[2px] bg-white/[0.10]" />
+            <div className="absolute left-[18px] top-4 bottom-4 w-[2px] bg-white/[0.10]" />
             <div
-              className="absolute left-[19px] top-4 w-[2px] bg-[#D7192D] transition-all duration-300"
+              className="absolute left-[18px] top-4 w-[2px] bg-[#D7192D] transition-all duration-300"
               style={{ height: `${Math.min(100, scrollProgress)}%` }}
             />
 
@@ -286,7 +286,6 @@ export function LandingWorkflow({ onOpenWaitlist }: LandingWorkflowProps) {
             </span>
           </div>
         )}
-
       </div>
     </section>
   );

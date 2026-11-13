@@ -17,7 +17,7 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen bg-[#07080B] text-neutral-900 font-sans selection:bg-[#EF4444]/30 selection:text-white antialiased">
       {/* Header Navigation */}
-      <LandingNavbar onOpenWaitlist={() => setIsWaitlistOpen(true)} />
+      <LandingNavbar />
 
       <main>
         {/* 1. Hero Section (Simple pricing for growing teams.) */}

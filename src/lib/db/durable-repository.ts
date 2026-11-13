@@ -19,6 +19,37 @@ const databasePath =
     ? ':memory:'
     : process.env.AIOSPARK_DB_PATH || path.join(process.cwd(), '.data', 'aiospark.sqlite');
 
+// Startup validation:
+// 1. Test mode with in-memory SQLite is only allowed when NODE_ENV='test' (explicit test runs)
+// 2. Production must have AIOSPARK_DB_PATH set to a persistent file
+// 3. When NOT in test mode, DB path is required for production
+if (process.env.AIOSPARK_TEST_MODE === 'true' && process.env.NODE_ENV !== 'test') {
+  console.error(
+    "[FATAL] AIOSPARK_TEST_MODE is enabled but NODE_ENV is not 'test'. " +
+    "Test mode with in-memory SQLite is only for explicit test runs (set NODE_ENV=test), not production."
+  );
+  process.exit(1);
+}
+
+// When not in explicit test mode (production or development), require AIOSPARK_DB_PATH
+if (process.env.AIOSPARK_TEST_MODE !== 'true' && !process.env.AIOSPARK_DB_PATH) {
+  console.error(
+    "[FATAL] AIOSPARK_DB_PATH is not configured. " +
+    "Set AIOSPARK_DB_PATH to a persistent SQLite file for production runtime."
+  );
+  process.exit(1);
+}
+
+// Only fail on in-memory when not in explicit test mode
+if (databasePath === ':memory:' && process.env.NODE_ENV !== 'test') {
+  console.error(
+    "[FATAL] Database path resolved to in-memory SQLite. " +
+    "This can only happen when AIOSPARK_TEST_MODE=true and NODE_ENV=test. " +
+    "For production/development, set AIOSPARK_DB_PATH to a persistent file path."
+  );
+  process.exit(1);
+}
+
 if (databasePath !== ':memory:') {
   fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 }

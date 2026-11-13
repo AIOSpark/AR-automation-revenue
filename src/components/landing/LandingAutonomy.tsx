@@ -1,294 +1,130 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { ShieldCheck, UserCheck, ArrowRight, CheckCircle2, Sliders, Lock, Zap } from "lucide-react";
+import { useReveal } from "./useReveal";
+import { ShieldCheck, Clock, Bot } from "lucide-react";
 
-interface LandingAutonomyProps {
-  onOpenWaitlist: () => void;
-}
-
-const POLICIES = [
-  {
-    id: "low-value",
-    title: "Low-value reminder",
-    badge: "Autonomous",
-    badgeColor: "emerald",
-    condition: "Invoice > 15 days overdue AND Customer risk < Medium AND Amount < ₹5,00,000",
-    action: "AI automatically drafts and dispatches payment nudge to AP primary contact.",
-    guardrail: "Max 2 autonomous nudges. Escalates to human if customer disputes or remains silent > 7 days.",
-    steps: [
-      { name: "Condition detected", status: "complete" },
-      { name: "Policy validated", status: "complete" },
-      { name: "Autonomous dispatch", status: "complete" },
-      { name: "Ledger status synced", status: "complete" },
-    ],
-  },
-  {
-    id: "high-value",
-    title: "High-value escalation",
-    badge: "Human-in-the-loop",
-    badgeColor: "amber",
-    condition: "Invoice > 30 days overdue OR Amount > ₹10,00,000",
-    action: "AI drafts executive escalation letter and attaches reconciliation ledger; pauses for controller sign-off.",
-    guardrail: "Human approval required before dispatch. Audit log recorded with timestamps.",
-    steps: [
-      { name: "High value flagged", status: "complete" },
-      { name: "Policy gate verified", status: "complete" },
-      { name: "Awaiting CFO approval", status: "active" },
-      { name: "Dispatch queue held", status: "pending" },
-    ],
-  },
-  {
-    id: "dispute",
-    title: "Dispute resolution",
-    badge: "Policy-gated",
-    badgeColor: "red",
-    condition: "Root cause = PO mismatch OR Tax code variance OR Missing GRN",
-    action: "AI compiles supporting delivery notes, recalculates tax delta, and prepares corrected invoice packet.",
-    guardrail: "Commercial credit notes require dual finance controller approval before ERP write-back.",
-    steps: [
-      { name: "Variance diagnosed", status: "complete" },
-      { name: "Correction packet ready", status: "complete" },
-      { name: "Dual-signoff approval", status: "active" },
-      { name: "ERP credit note write-back", status: "pending" },
-    ],
-  },
+const AUDIT_LOG = [
+  { time: "10:42 AM", actor: "AIOSpark Agent", action: "Proposed reminder for Acme Precision (₹12.8L)", status: "pending", statusLabel: "Awaiting approval" },
+  { time: "10:35 AM", actor: "R. Mehta (Controller)", action: "Approved escalation to Nova Industries", status: "done", statusLabel: "Approved" },
+  { time: "10:31 AM", actor: "AIOSpark Agent", action: "Detected PO mismatch on invoice INV-4491", status: "done", statusLabel: "Resolved" },
+  { time: "09:58 AM", actor: "AIOSpark Agent", action: "Sent payment reminder to Summit Textiles", status: "done", statusLabel: "Executed" },
 ];
 
-export function LandingAutonomy({ onOpenWaitlist }: LandingAutonomyProps) {
-  const [activePolicyIdx, setActivePolicyIdx] = useState(1);
-  const [revealed, setRevealed] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) setRevealed((p) => new Set([...p, e.target.id]));
-        });
-      },
-      { threshold: 0.15, rootMargin: "0px 0px -10% 0px" }
-    );
-    document.querySelectorAll("[data-reveal]").forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
-
-  const isRev = (id: string) => revealed.has(id);
-  const activePolicy = POLICIES[activePolicyIdx];
-
-  const badgeClass = (color: string) => {
-    if (color === "emerald") return "bg-emerald-500/10 text-emerald-400 border-emerald-500/25";
-    if (color === "amber") return "bg-amber-500/10 text-amber-400 border-amber-500/25";
-    return "bg-[#FF2D2D]/10 text-[#FF2D2D] border-[#FF2D2D]/25";
-  };
+export function LandingAutonomy() {
+  useReveal();
 
   return (
-    <section
-      id="autonomy"
-      className="relative text-white border-t border-white/[0.08]"
-      style={{ background: "#050505" }}
-    >
-      <div
-        aria-hidden="true"
-        className="absolute top-[10%] right-[-6%] w-[500px] h-[500px] rounded-full pointer-events-none"
-        style={{
-          background: "radial-gradient(circle, rgba(255,45,45,0.06) 0%, transparent 70%)",
-          filter: "blur(90px)",
-        }}
-      />
+    <section id="autonomy" className="aios-section">
+      <div className="aios-container">
+        <div className="max-w-2xl mx-auto text-center mb-16" data-aios-reveal id="autonomy-copy">
+          <h2 className="mb-6 tracking-tight">AI proposes. Your team approves.</h2>
+          <p className="aios-body mx-auto">
+            Every recovery action is governed by your policy rules. Nothing is
+            dispatched without the right sign-off, and every decision is logged
+            for audit.
+          </p>
+        </div>
 
-      <div className="max-w-[1400px] mx-auto px-6 sm:px-8 lg:px-12 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
-          
-          {/* LEFT: 40% STICKY COLUMN */}
-          <div className="lg:col-span-5 lg:sticky lg:top-[120px] self-start space-y-6">
-            <div
-              data-reveal
-              id="au-eyebrow"
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.12] text-[12px] font-mono text-neutral-300 uppercase tracking-wider ${
-                isRev("au-eyebrow") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#FF2D2D] animate-pulse" />
-              <span>CONTROLLED AUTONOMY</span>
-            </div>
-
-            <h2
-              data-reveal
-              id="au-headline"
-              className={`pt-1 font-bold text-white tracking-[-0.04em] ${
-                isRev("au-headline") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-              }`}
-              style={{ fontSize: "clamp(2rem, 3.4vw, 3rem)", lineHeight: "1.15" }}
-            >
-              Your finance team sets<br />
-              <span className="text-[#FF2D2D]">the rules.</span> AIOSpark executes.
-            </h2>
-
-            <p
-              data-reveal
-              id="au-subtext"
-              className={`text-neutral-300 text-base lg:text-[17px] leading-relaxed max-w-lg ${
-                isRev("au-subtext") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
-              }`}
-            >
-              Autonomy without guardrails is a liability. AIOSpark executes recovery actions strictly within the approval policies you define — humans remain fully in control of high-value communications and ledger modifications.
-            </p>
-
-            <div
-              data-reveal
-              id="au-callout"
-              className={`p-5 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-2 ${
-                isRev("au-callout") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
-              }`}
-            >
-              <div className="flex items-center gap-2.5 text-white font-semibold text-[14px]">
-                <ShieldCheck className="w-4 h-4 text-[#FF2D2D]" />
-                <span>Zero unsolicited actions</span>
+        <div className="grid grid-cols-1 gap-6 md:gap-8 items-start" data-aios-reveal id="autonomy-grid">
+          {/* Policy rules card */}
+          <div className="aios-card p-6 sm:p-8 rounded-lg flex flex-col gap-5" data-aios-reveal id="policy-card">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-md bg-[#FF2D2D]/10 flex items-center justify-center border border-[#FF2D2D]/25">
+                <span className="text-[#FF2D2D]">&#9993;</span>
               </div>
-              <p className="text-[13px] text-neutral-400 leading-relaxed">
-                Set approval floors per legal entity, invoice tier, and customer tier. Every action is signed with cryptographic audit lineage.
-              </p>
-            </div>
-          </div>
-
-          {/* RIGHT: 60% TABBED POLICY WORKBENCH (HARD-CAPPED ~560PX) */}
-          <div className="lg:col-span-7 w-full">
-            <div
-              data-reveal
-              id="au-panel"
-              className={`rounded-2xl bg-[#090A0D] border border-white/[0.10] p-6 sm:p-7 shadow-2xl max-h-[560px] flex flex-col justify-between ${
-                isRev("au-panel") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"
-              }`}
-            >
-              {/* Top: Policy Tabs */}
               <div>
-                <div className="flex items-center justify-between pb-4 border-b border-white/[0.08] mb-5">
-                  <div className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-neutral-400" />
-                    <span className="text-[13px] font-mono font-bold text-white uppercase tracking-wider">
-                      Policy Rule Configuration
-                    </span>
-                  </div>
-                  <span className="text-[12px] font-mono text-neutral-400">3 Active Rules</span>
-                </div>
-
-                {/* Tabs */}
-                <div className="grid grid-cols-3 gap-2 p-1 rounded-xl bg-white/[0.03] border border-white/[0.06] mb-5">
-                  {POLICIES.map((p, i) => {
-                    const active = i === activePolicyIdx;
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={() => setActivePolicyIdx(i)}
-                        className={`min-h-[44px] px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-center cursor-pointer ${
-                          active
-                            ? "bg-white/[0.10] text-white shadow-sm font-semibold"
-                            : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
-                        }`}
-                      >
-                        {p.title}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Active Rule Details */}
-                <div className="space-y-4">
-                  {/* Badge + Header */}
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-white tracking-tight">
-                      {activePolicy.title}
-                    </h3>
-                    <span className={`px-2.5 py-1 rounded-full text-[12px] font-mono font-bold border ${badgeClass(activePolicy.badgeColor)}`}>
-                      {activePolicy.badge}
-                    </span>
-                  </div>
-
-                  {/* When Condition */}
-                  <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                    <span className="text-[12px] font-mono text-neutral-400 uppercase tracking-wider block mb-1">
-                      TRIGGER CONDITION (WHEN)
-                    </span>
-                    <div className="text-[13px] font-mono text-neutral-200">
-                      {activePolicy.condition}
-                    </div>
-                  </div>
-
-                  {/* Then Action */}
-                  <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                    <span className="text-[12px] font-mono text-neutral-400 uppercase tracking-wider block mb-1">
-                      DISPATCH POLICY (THEN)
-                    </span>
-                    <div className="text-[13px] font-semibold text-white leading-relaxed">
-                      {activePolicy.action}
-                    </div>
-                    <div className="text-[12px] text-neutral-400 mt-2 flex items-center gap-1.5 border-t border-white/[0.05] pt-2">
-                      <Lock className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
-                      <span>{activePolicy.guardrail}</span>
-                    </div>
-                  </div>
-                </div>
+                <h3 className="text-xl font-bold text-white mb-1">Policy rules you control</h3>
+                <p className="text-sm text-[#A1A1AA] leading-relaxed">
+                  Set thresholds and approvers once. AI works within them.
+                </p>
               </div>
+            </div>
 
-              {/* Execution Path (Bottom connected stepper) */}
-              <div className="pt-4 border-t border-white/[0.08] mt-4">
-                <span className="text-[12px] font-mono text-neutral-400 uppercase tracking-wider block mb-3">
-                  Live Execution Trace
+            <div className="p-6 rounded-md bg-white/[0.02] border border-white/[0.05]">
+              <div className="flex items-start gap-3 mb-5">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#FF2D2D]/20 flex items-center justify-center text-[#FF2D2D] text-[11px] font-bold border border-[#FF2D2D]/30">
+                  1
                 </span>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {activePolicy.steps.map((st, i) => {
-                    const isDone = st.status === "complete";
-                    const isActive = st.status === "active";
-                    return (
-                      <div
-                        key={st.name}
-                        className={`p-2.5 rounded-lg border text-left ${
-                          isDone
-                            ? "bg-emerald-500/[0.05] border-emerald-500/20"
-                            : isActive
-                            ? "bg-[#FF2D2D]/[0.08] border-[#FF2D2D]/35"
-                            : "bg-white/[0.02] border-white/[0.05]"
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              isDone
-                                ? "bg-emerald-400"
-                                : isActive
-                                ? "bg-[#FF2D2D] animate-pulse"
-                                : "bg-neutral-600"
-                            }`}
-                          />
-                          <span
-                            className={`text-[12px] font-mono font-bold uppercase ${
-                              isDone
-                                ? "text-emerald-400"
-                                : isActive
-                                ? "text-[#FF2D2D]"
-                                : "text-neutral-500"
-                            }`}
-                          >
-                            Step 0{i + 1}
-                          </span>
-                        </div>
-                        <div
-                          className={`text-[12px] font-medium leading-snug line-clamp-1 ${
-                            isActive ? "text-white font-semibold" : "text-neutral-300"
-                          }`}
-                        >
-                          {st.name}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <p className="text-neutral-200 leading-relaxed flex-1">
+                  Invoices above <span className="text-white font-semibold">₹50,000</span> require controller approval
+                  before any reminder or escalation is sent.
+                </p>
               </div>
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#FF2D2D]/20 flex items-center justify-center text-[#FF2D2D] text-[11px] font-bold border border-[#FF2D2D]/30">
+                  2
+                </span>
+                <p className="text-neutral-200 leading-relaxed flex-1">
+                  Disputes above <span className="text-white font-semibold">₹5 Cr</span> route to the CFO for sign-off.
+                </p>
+              </div>
+            </div>
 
+            <div className="mt-2 flex items-center gap-2 text-[13px] text-[#71717A] font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+              Policy engine active &middot; Rules editable in dashboard
             </div>
           </div>
 
+          {/* Audit log card */}
+          <div className="aios-card p-6 sm:p-8 rounded-lg flex flex-col gap-4" data-aios-reveal id="audit-log">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white mb-1">Audit log</h3>
+                <p className="text-sm text-[#A1A1AA]">
+                  Every action, decision and approval is recorded
+                </p>
+              </div>
+              <span className="aios-chip aios-chip--green">Fully auditable</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto max-h-[340px] pr-2 space-y-4">
+              {AUDIT_LOG.map((entry, i) => {
+                const isDone = entry.status === "done";
+                return (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="flex items-center gap-2">
+                      {isDone ? (
+                        <div className="w-2 h-2 rounded-full bg-[#10B981] shrink-0" />
+                      ) : (
+                        <div className="w-2 h-2 rounded-full border-2 border-[#FF2D2D] shrink-0" />
+                      )}
+                    </div>
+                    <div className="flex flex-col">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-[12px] font-mono font-bold text-[#71717A] tabular-nums">
+                          {entry.time}
+                        </span>
+                        <span className="text-[13px] font-medium text-[#A1A1AA]">{entry.actor}</span>
+                        <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${isDone ? "bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20" : "bg-[#FF2D2D]/10 text-[#FF2D2D] border border-[#FF2D2D]/20"}`}>
+                          {entry.statusLabel}
+                        </span>
+                      </div>
+                      <p className="text-sm text-[#A1A1AA] leading-relaxed mt-0.5">{entry.action}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom strip */}
+        <div className="mt-16 border-t border-white/[0.06] pt-12" data-aios-reveal id="autonomy-strip">
+          <div className="max-w-xl mx-auto text-center grid grid-cols-1 sm:grid-cols-3 gap-8 items-center">
+            <div>
+              <ShieldCheck className="w-6 h-6 text-[#10B981] mx-auto mb-3" />
+              <p className="text-[14px] text-[#A1A1AA] font-medium leading-snug">SOC 2 aligned controls</p>
+            </div>
+            <div>
+              <Clock className="w-6 h-6 text-[#71717A] mx-auto mb-3" />
+              <p className="text-[14px] text-[#A1A1AA] font-medium leading-snug">Full retention history</p>
+            </div>
+            <div>
+              <Bot className="w-6 h-6 text-[#FF2D2D] mx-auto mb-3" />
+              <p className="text-[14px] text-[#A1A1AA] font-medium leading-snug">AI never acts alone</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>

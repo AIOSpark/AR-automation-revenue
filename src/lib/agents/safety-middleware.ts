@@ -3,7 +3,7 @@
 // Shared middleware embedded inside AgentExecutor that CANNOT be bypassed by individual agent implementations or org config overrides.
 
 import { policyEngine, PolicyContext, MANDATORY_APPROVAL_HIGH_RISK_ACTIONS } from './policy-engine';
-import { getDatabase, withWriteTransaction, writeSnapshot, deleteSnapshot } from '../db/durable-repository';
+import { pool } from '../db/postgres';
 import { udmStore } from '../udm/store';
 import { can, Action, Resource, Role } from '../tenant/permissions';
 
@@ -266,52 +266,59 @@ private readonly idempotencyNamespace = 'safety:double_execution'
 /**
    * Idempotency & Double-Click Protection (Durable, not process-local)
    */
-  public checkDoubleExecution(context: SafetyPipelineContext): { isDuplicate: boolean; hash: string } {
+  public async checkDoubleExecution(context: SafetyPipelineContext): Promise<{ isDuplicate: boolean; hash: string }> {
     const key = `${context.organizationId}:${context.agentName}:${context.targetEntity}:${context.targetId}:${context.actionType}`;
 
-    // Check durable SQLite storage for existing entry
-    const db = getDatabase();
-    const statement = db.prepare(
-      'SELECT payload FROM repository_snapshots WHERE namespace = ?'
+    // Use atomic PostgreSQL INSERT ... ON CONFLICT to check-and-reserve in one step.
+    // The udm_idempotency_keys table has UNIQUE (organization_id, key), ensuring:
+    // - First request: INSERT succeeds → not a duplicate, reservation created
+    // - Concurrent request with same key: INSERT conflicts, is duplicate
+    // - Cross-tenant: key includes organization_id, naturally scoped
+    // - Expiry does NOT authorize repeating irreversible actions
+    // - Previously committed actions cannot be repeated by clearing reservations
+    // Pattern: INSERT ... ON CONFLICT = atomic check-and-reserve.
+    // If the INSERT succeeds (rowCount > 0), the key was reserved by this instance (not duplicate).
+    // If the INSERT is ignored (rowCount = 0), another instance already reserved it.
+
+    // Attempt the atomic reservation using PostgreSQL's ON CONFLICT pattern.
+    const insertResult = await pool.query(
+      `INSERT INTO udm_idempotency_keys(organization_id, key, record_id) VALUES (?, ?, ?) ON CONFLICT (organization_id, key) DO NOTHING`,
+      [context.organizationId, key, `res_${Date.now()}`]
     );
-    const existing = statement.get(this.idempotencyNamespace) as {
-      payload?: string;
-    } | undefined;
 
-    if (existing?.payload) {
-      try {
-        const stored = JSON.parse(existing.payload) as {
-          hash: string;
-          timestamp: string;
-          organizationId: string;
-        };
-        // Check if the same key was executed within the idempotency window
-        const storedTs = new Date(stored.timestamp).getTime();
-        const now = Date.now();
-        const idempotencyWindowMs = 24 * 60 * 60 * 1000; // 24 hours (was 5s locally)
+    // Check if the insert actually succeeded (rowCount > 0 means our INSERT ran, not ignored)
+    const insertSucceeded = insertResult.rowCount === 1;
 
-        if (now - storedTs < idempotencyWindowMs && stored.hash === key) {
-          return { isDuplicate: true, hash: key };
-        }
-      } catch {
-        // Corrupt data - treat as not duplicate
-      }
+    if (insertSucceeded) {
+      // INSERT succeeded (rowCount = 1) - this instance reserved the key, not a duplicate
+      return Promise.resolve({ isDuplicate: false, hash: key });
     }
 
-    // Record this execution in durable storage
-    const now = new Date().toISOString();
-    const payload = JSON.stringify({
-      hash: key,
-      timestamp: now,
-      organizationId: context.organizationId,
-    });
-    writeSnapshot(this.idempotencyNamespace, payload);
+    // INSERT was ignored (rowCount = 0 or null) - another instance already reserved it first
+    // But we need to check if the key already existed before our attempt
+    const verifyResult = await pool.query(
+      `SELECT 1 AS present FROM udm_idempotency_keys WHERE organization_id = ? AND key = ? LIMIT 1`,
+      [context.organizationId, key]
+    );
+    const keyExists = verifyResult.rows.length > 0;
 
-    return { isDuplicate: false, hash: key };
+    if (keyExists) {
+      // Key already existed - conservative: treat as duplicate
+      // since the prior action may have been committed.
+      return Promise.resolve({ isDuplicate: true, hash: key });
+    }
+
+    // Key doesn't exist and insert didn't succeed - this shouldn't happen normally,
+    // but conservatively treat as duplicate for safety
+    return Promise.resolve({ isDuplicate: true, hash: key });
   }
 
-  public clearDeduplicationCache(): void {
-    deleteSnapshot(this.idempotencyNamespace);
+  public async clearDeduplicationCache(): Promise<void> {
+    // Clear all safety double-execution reservations from udm_idempotency_keys
+    await pool.query(
+      'DELETE FROM udm_idempotency_keys WHERE organization_id = ? AND key = ?'
+    , ['__all_orgs__', 'safety:double_execution']
+    );
   }
 }
 

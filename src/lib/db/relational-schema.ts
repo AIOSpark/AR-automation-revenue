@@ -155,6 +155,25 @@ CREATE TABLE IF NOT EXISTS udm_api_idempotency_keys (
   fingerprint TEXT NOT NULL,
   response TEXT,
   status TEXT NOT NULL DEFAULT 'reserved',
+
+CREATE TABLE IF NOT EXISTS udm_schedules (
+  id TEXT NOT NULL,
+  organization_id TEXT NOT NULL,
+  report_id TEXT NOT NULL,
+  params TEXT NOT NULL DEFAULT {},
+  format TEXT NOT NULL,
+  recipients TEXT NOT NULL,
+  cadence TEXT NOT NULL,
+  created_by_user_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT active,
+  last_run_at TEXT,
+  next_run_at TEXT NOT NULL,
+  run_count INTEGER NOT NULL DEFAULT 0,
+  max_runs INTEGER,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (id, organization_id)
+);
   PRIMARY KEY (organization_id, endpoint, key)
 );
 `;
