@@ -2,7 +2,16 @@
 
 import { udmStore } from '../udm/store';
 import { Customer, Invoice } from '../udm/types';
-import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
+import {
+  backfillOperationalFromSnapshots,
+  clearImportState,
+  insertImportBatch,
+  insertImportDuplicate,
+  insertImportError,
+  readImportState,
+  updateImportBatch,
+} from '../db/operational-repository';
+import { withWriteTransaction } from '../db/durable-repository';
 
 export interface ImportBatchRecord {
   id: string;
@@ -53,24 +62,16 @@ class ImportPipelineEngine {
   private duplicates: Map<string, PossibleDuplicateRecord> = new Map();
 
   constructor() {
-    const state = readSnapshot<{
-      batches: ImportBatchRecord[];
-      errors: ImportErrorRecord[];
-      duplicates: PossibleDuplicateRecord[];
-    }>('import_batches');
-    if (state) {
-      this.batches = new Map(state.batches.map((b) => [b.id, b]));
-      this.errors = new Map(state.errors.map((e) => [e.id, e]));
-      this.duplicates = new Map(state.duplicates.map((d) => [d.id, d]));
-    }
+    backfillOperationalFromSnapshots();
+    this.reloadFromDurableState();
   }
 
-  private persist(): void {
-    writeSnapshot('import_batches', {
-      batches: Array.from(this.batches.values()),
-      errors: Array.from(this.errors.values()),
-      duplicates: Array.from(this.duplicates.values()),
-    });
+  private reloadFromDurableState(): void {
+    backfillOperationalFromSnapshots();
+    const state = readImportState();
+    this.batches = new Map((state.batches as ImportBatchRecord[]).map((b) => [b.id, b]));
+    this.errors = new Map((state.errors as ImportErrorRecord[]).map((e) => [e.id, e]));
+    this.duplicates = new Map((state.duplicates as PossibleDuplicateRecord[]).map((d) => [d.id, d]));
   }
 
   // STAGE 1: UPLOAD (Durable Raw Input Persistence)
@@ -89,8 +90,10 @@ class ImportPipelineEngine {
       skipped_count: 0,
       started_at: now,
     };
-    this.batches.set(id, batch);
-    this.persist();
+    withWriteTransaction(() => {
+      insertImportBatch(batch);
+      this.batches.set(id, batch);
+    });
     return batch;
   }
 
@@ -154,6 +157,16 @@ class ImportPipelineEngine {
     successCount: number;
     skippedCount: number;
   } {
+    return withWriteTransaction(() => {
+      return this.processBatchInternal(batchId, config);
+    });
+  }
+
+  private processBatchInternal(batchId: string, config: ImportPipelineConfig): {
+    summary: string;
+    successCount: number;
+    skippedCount: number;
+  } {
     const batch = this.batches.get(batchId);
     if (!batch) throw new Error(`Batch not found: ${batchId}`);
 
@@ -169,118 +182,130 @@ class ImportPipelineEngine {
     let successCount = 0;
     let skippedCount = 0;
 
-    for (const rawRow of batch.raw_payload) {
-      const validation = this.validateRow(rawRow, mapping);
-      if (!validation.valid) {
-        skippedCount++;
-        const errId = `err_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
-        this.errors.set(errId, {
-          id: errId,
-          organization_id: config.organizationId,
-          import_batch_id: batchId,
-          raw_row_reference: rawRow,
-          reason: validation.reason!,
-          field: validation.field,
-          created_at: new Date().toISOString(),
-        });
-        continue;
-      }
+    // Batch all UDM mutations into a single durable write. Calling
+    // udmStore.insertCustomer/insertInvoice per row would persist the full
+    // state to SQLite on every row, which is O(n^2) for large imports.
+    // batchInsert defers persistence until all rows are processed.
+    udmStore.batchInsert(() => {
+      for (const rawRow of batch.raw_payload) {
+        const validation = this.validateRow(rawRow, mapping);
+        if (!validation.valid) {
+          skippedCount++;
+          const errId = `err_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+          const errorRecord: ImportErrorRecord = {
+            id: errId,
+            organization_id: config.organizationId,
+            import_batch_id: batchId,
+            raw_row_reference: rawRow,
+            reason: validation.reason!,
+            field: validation.field,
+            created_at: new Date().toISOString(),
+          };
+          insertImportError(errorRecord);
+          this.errors.set(errId, errorRecord);
+          continue;
+        }
 
-      const getVal = (targetField: string) => {
-        const mappedCol = mapping[targetField] || targetField;
-        return rawRow[mappedCol] ?? rawRow[targetField];
-      };
+        const getVal = (targetField: string) => {
+          const mappedCol = mapping[targetField] || targetField;
+          return rawRow[mappedCol] ?? rawRow[targetField];
+        };
 
-      const custName = String(getVal('customer_name')).trim();
-      const rawAmt = parseFloat(String(getVal('amount')).replace(/[^0-9.-]/g, ''));
-      const amountMinorUnits = Math.round(rawAmt * 100);
-      const invNumber = String(getVal('invoice_number') || `INV-${Date.now()}`).trim();
-      const parsedDueDate = this.parseDate(String(getVal('due_date')), batch.date_format_convention);
+        const custName = String(getVal('customer_name')).trim();
+        const rawAmt = parseFloat(String(getVal('amount')).replace(/[^0-9.-]/g, ''));
+        const amountMinorUnits = Math.round(rawAmt * 100);
+        const invNumber = String(getVal('invoice_number') || `INV-${Date.now()}`).trim();
+        const parsedDueDate = this.parseDate(String(getVal('due_date')), batch.date_format_convention);
 
-      if (!parsedDueDate) {
-        skippedCount++;
-        const errId = `err_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
-        this.errors.set(errId, {
-          id: errId,
-          organization_id: config.organizationId,
-          import_batch_id: batchId,
-          raw_row_reference: rawRow,
-          reason: `Unparseable date '${getVal('due_date')}' according to ${batch.date_format_convention} format`,
-          field: 'due_date',
-          created_at: new Date().toISOString(),
-        });
-        continue;
-      }
+        if (!parsedDueDate) {
+          skippedCount++;
+          const errId = `err_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+          const errorRecord: ImportErrorRecord = {
+            id: errId,
+            organization_id: config.organizationId,
+            import_batch_id: batchId,
+            raw_row_reference: rawRow,
+            reason: `Unparseable date '${getVal('due_date')}' according to ${batch.date_format_convention} format`,
+            field: 'due_date',
+            created_at: new Date().toISOString(),
+          };
+          insertImportError(errorRecord);
+          this.errors.set(errId, errorRecord);
+          continue;
+        }
 
-      // Customer Resolution & Deduplication
-      const existingCustomers = udmStore.getCustomers();
-      let customer = existingCustomers.find(
-        (c) => c.name.toLowerCase() === custName.toLowerCase()
-      );
+        // Customer Resolution & Deduplication
+        const existingCustomers = udmStore.getCustomers();
+        let customer = existingCustomers.find(
+          (c) => c.name.toLowerCase() === custName.toLowerCase()
+        );
 
-      if (!customer) {
-        customer = udmStore.insertCustomer({
+        if (!customer) {
+          customer = udmStore.insertCustomer({
+            organization_id: config.organizationId,
+            source_system: config.sourceSystem,
+            source_id: `CUST_${custName.toUpperCase().replace(/\s+/g, '_')}`,
+            name: custName,
+            credit_limit_minor_units: 0,
+            currency: 'INR',
+            payment_terms_days: 30,
+          });
+        }
+
+        // Invoice Exact/Fuzzy Deduplication Pass
+        const existingInvoices = udmStore.getInvoices();
+        const exactMatch = existingInvoices.find(
+          (i) => i.source_system === config.sourceSystem && (i.source_id === invNumber || i.number === invNumber)
+        );
+
+        if (exactMatch) {
+          // Upsert update existing invoice
+          exactMatch.amount_minor_units = amountMinorUnits;
+          exactMatch.due_date = parsedDueDate;
+          exactMatch.updated_at = new Date().toISOString();
+          successCount++;
+          continue;
+        }
+
+        // Fuzzy Match Check (similarly-spelled invoice or customer name with exact amount)
+        const fuzzyMatch = existingInvoices.find(
+          (i) => i.customer_id === customer!.id && i.amount_minor_units === amountMinorUnits
+        );
+
+        if (fuzzyMatch && fuzzyMatch.number !== invNumber) {
+          const dupId = `dup_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+          const duplicate: PossibleDuplicateRecord = {
+            id: dupId,
+            organization_id: config.organizationId,
+            import_batch_id: batchId,
+            incoming_record_json: rawRow,
+            existing_record_id: fuzzyMatch.id,
+            confidence: 0.85, // Review threshold match
+            status: 'pending',
+            created_at: new Date().toISOString(),
+          };
+          insertImportDuplicate(duplicate);
+          this.duplicates.set(dupId, duplicate);
+        }
+
+        // Store New Invoice Record into UDM
+        udmStore.insertInvoice({
           organization_id: config.organizationId,
           source_system: config.sourceSystem,
-          source_id: `CUST_${custName.toUpperCase().replace(/\s+/g, '_')}`,
-          name: custName,
-          credit_limit_minor_units: 0,
+          source_id: invNumber,
+          customer_id: customer.id,
+          number: invNumber,
+          amount_minor_units: amountMinorUnits,
           currency: 'INR',
-          payment_terms_days: 30,
+          tax_amount_minor_units: Math.round(amountMinorUnits * 0.18),
+          issue_date: new Date().toISOString().split('T')[0],
+          due_date: parsedDueDate,
+          status: 'open',
         });
-      }
 
-      // Invoice Exact/Fuzzy Deduplication Pass
-      const existingInvoices = udmStore.getInvoices();
-      const exactMatch = existingInvoices.find(
-        (i) => i.source_system === config.sourceSystem && (i.source_id === invNumber || i.number === invNumber)
-      );
-
-      if (exactMatch) {
-        // Upsert update existing invoice
-        exactMatch.amount_minor_units = amountMinorUnits;
-        exactMatch.due_date = parsedDueDate;
-        exactMatch.updated_at = new Date().toISOString();
         successCount++;
-        continue;
       }
-
-      // Fuzzy Match Check (similarly-spelled invoice or customer name with exact amount)
-      const fuzzyMatch = existingInvoices.find(
-        (i) => i.customer_id === customer!.id && i.amount_minor_units === amountMinorUnits
-      );
-
-      if (fuzzyMatch && fuzzyMatch.number !== invNumber) {
-        const dupId = `dup_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
-        this.duplicates.set(dupId, {
-          id: dupId,
-          organization_id: config.organizationId,
-          import_batch_id: batchId,
-          incoming_record_json: rawRow,
-          existing_record_id: fuzzyMatch.id,
-          confidence: 0.85, // Review threshold match
-          status: 'pending',
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      // Store New Invoice Record into UDM
-      udmStore.insertInvoice({
-        organization_id: config.organizationId,
-        source_system: config.sourceSystem,
-        source_id: invNumber,
-        customer_id: customer.id,
-        number: invNumber,
-        amount_minor_units: amountMinorUnits,
-        currency: 'INR',
-        tax_amount_minor_units: Math.round(amountMinorUnits * 0.18),
-        issue_date: new Date().toISOString().split('T')[0],
-        due_date: parsedDueDate,
-        status: 'open',
-      });
-
-      successCount++;
-    }
+    });
 
     // STAGE 8: READY FOR AI
     batch.status = 'completed';
@@ -288,7 +313,7 @@ class ImportPipelineEngine {
     batch.skipped_count = skippedCount;
     batch.completed_at = new Date().toISOString();
 
-    this.persist();
+    updateImportBatch(batch);
 
     const summaryStr = `${successCount.toLocaleString()} invoices imported successfully, ${skippedCount} skipped — view details.`;
 
@@ -300,18 +325,22 @@ class ImportPipelineEngine {
   }
 
   public getBatchErrors(batchId: string): ImportErrorRecord[] {
+    this.reloadFromDurableState();
     return Array.from(this.errors.values()).filter((e) => e.import_batch_id === batchId);
   }
 
   public getDuplicates(orgId: string): PossibleDuplicateRecord[] {
+    this.reloadFromDurableState();
     return Array.from(this.duplicates.values()).filter((d) => d.organization_id === orgId && d.status === 'pending');
   }
 
   public clearAll(): void {
-    this.batches.clear();
-    this.errors.clear();
-    this.duplicates.clear();
-    deleteSnapshot('import_batches');
+    withWriteTransaction(() => {
+      clearImportState();
+      this.batches.clear();
+      this.errors.clear();
+      this.duplicates.clear();
+    });
   }
 }
 

@@ -143,11 +143,8 @@ export class ExecutionService {
         recovery_attempts: 0,
       });
     } else {
-      // Check if idempotency key conflicts
-      if (execution.idempotency_key !== execIdempotencyKey) {
-        throw new Error('Idempotency key conflict with existing execution');
-      }
-      // If already in terminal verified state, return success
+      // If already in terminal verified state, return success regardless of
+      // the idempotency key — the financial effect is already durable.
       if (execution.state === 'verified') {
         return {
           success: true,
@@ -156,6 +153,14 @@ export class ExecutionService {
           message: 'Action already verified',
         };
       }
+      // Check if idempotency key conflicts (only relevant for non-terminal states)
+      if (execution.idempotency_key !== execIdempotencyKey) {
+        throw new Error('Idempotency key conflict with existing execution');
+      }
+      // Increment recovery attempts for any non-terminal re-execution (crash recovery).
+      execution = executionStore.updateState(execution.id, execution.state, {
+        recovery_attempts: (execution.recovery_attempts ?? 0) + 1,
+      });
     }
     
     // Set tenant context
@@ -192,11 +197,15 @@ export class ExecutionService {
       const verificationResult = await this.verifyExecution(execution);
       
       if (verificationResult.verified) {
+        // Mark the approval execution result FIRST so the durable approval
+        // state accurately reflects the outcome before we record the
+        // execution as verified. If marking the verified state fails, the
+        // execution remains in 'verifying' and is recoverable on restart.
+        approvalStore.markExecutionResult(approval.id, 'succeeded');
         execution = executionStore.updateState(execution.id, 'verified', {
           verified_at: new Date().toISOString(),
           verification_result: verificationResult,
         });
-        approvalStore.markExecutionResult(approval.id, 'succeeded');
         return {
           success: true,
           executionId: execution.id,
@@ -204,12 +213,12 @@ export class ExecutionService {
           message: 'Action executed and verified successfully',
         };
       } else {
+        approvalStore.markExecutionResult(approval.id, 'failed', verificationResult.reason);
         execution = executionStore.updateState(execution.id, 'verification_failed', {
           verification_result: verificationResult,
           failure_reason: verificationResult.reason,
           failure_classification: 'verification_failure',
         });
-        approvalStore.markExecutionResult(approval.id, 'failed', verificationResult.reason);
         return {
           success: false,
           executionId: execution.id,
@@ -218,13 +227,28 @@ export class ExecutionService {
         };
       }
     } catch (error: any) {
+      if (approval) {
+        // Never overwrite an already-successful approval with a failure caused
+        // only by a retry (e.g. duplicate match after the financial effect is
+        // already durable). Reconcile execution to match the approval outcome.
+        if (approval.execution_status === 'succeeded' && approval.executed_at !== null) {
+          execution = executionStore.updateState(execution.id, 'verified', {
+            verified_at: new Date().toISOString(),
+            verification_result: { recovered: true, reason: error.message },
+          });
+          return {
+            success: true,
+            executionId: execution.id,
+            state: 'verified',
+            message: 'Action already executed (recovery reconciled outcome)',
+          };
+        }
+        approvalStore.markExecutionResult(approval.id, 'failed', error.message);
+      }
       execution = executionStore.updateState(execution.id, 'execution_failed', {
         failure_reason: error.message,
         failure_classification: 'execution_error',
       });
-      if (approval) {
-        approvalStore.markExecutionResult(approval.id, 'failed', error.message);
-      }
       return {
         success: false,
         executionId: execution.id,
@@ -260,6 +284,17 @@ export class ExecutionService {
     const currentOutstanding = getInvoiceOutstandingBalance(invoice);
     if (amount > currentOutstanding) {
       throw new Error(`Allocation ${amount} exceeds outstanding balance ${currentOutstanding}`);
+    }
+    
+    // Idempotent recovery: if a match for this payment+invoice+amount already
+    // exists (financial effect committed before a crash), return it instead of
+    // creating a duplicate. This prevents a retry from double-debiting or from
+    // failing on a duplicate-match error after the effect is already durable.
+    const existingMatch = udmStore.getMatches().find(
+      (m) => m.payment_id === paymentId && m.invoice_id === invoiceId && m.matched_amount_minor_units === amount && m.organization_id === orgId
+    );
+    if (existingMatch) {
+      return existingMatch.id;
     }
     
     // Create match

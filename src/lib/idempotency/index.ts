@@ -24,9 +24,10 @@ export function computeRequestFingerprint(body: unknown): string {
  *
  * Returns:
  *   { status: 'available', recordId: null } — key not seen before, reserved for this request
-   *   { status: 'replay', recordId, response } — same key + same fingerprint, return cached response
-   *   { status: 'conflict', recordId } — same key + different fingerprint, return 409
-   */
+ *   { status: 'recoverable', recordId: null } — key reserved but operation never completed (crash recovery)
+ *   { status: 'replay', recordId, response } — same key + same fingerprint, return cached response
+ *   { status: 'conflict', recordId } — same key + different fingerprint (HTTP 409)
+ */
 export function checkAndReserveIdempotency(
   orgId: string,
   endpoint: string,

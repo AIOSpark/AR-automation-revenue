@@ -187,12 +187,16 @@ export class PaymentProcessorService {
 
     const prorationAmountMinorUnits = Math.round(newPlanProratedValue - unusedOldValue);
 
-    const updatedSub = billingStore.setSubscription(organizationId, {
-      plan_id: newPlanId,
-      status: currentSub.status === 'canceled' ? 'active' : currentSub.status,
-      pending_plan_id: null,
-      pending_razorpay_subscription_id: null,
-    });
+    const updatedSub = billingStore.setSubscription(
+      organizationId,
+      {
+        plan_id: newPlanId,
+        status: currentSub.status === 'canceled' ? 'active' : currentSub.status,
+        pending_plan_id: null,
+        pending_razorpay_subscription_id: null,
+      },
+      { expectedVersion: currentSub.version ?? 0 }
+    );
 
     return {
       subscription: updatedSub,

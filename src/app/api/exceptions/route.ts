@@ -93,6 +93,12 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'exceptionId is required' }, { status: 400 });
     }
 
+    // Terminal financial decisions require approval authority, not merely edit.
+    if (toStatus && ['approved', 'rejected', 'executed'].includes(toStatus)) {
+      const approvalPermissionError = validatePermission(context, 'approve', 'exceptions');
+      if (approvalPermissionError) return approvalPermissionError;
+    }
+
     udmStore.setTenantContext(orgId);
     const exceptions = udmStore.getExceptions();
     const exc = exceptions.find((e) => e.id === exceptionId);

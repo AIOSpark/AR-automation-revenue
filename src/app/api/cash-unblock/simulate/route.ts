@@ -4,7 +4,7 @@ import { resolveTenantContext, validatePermission } from '@/lib/tenant/middlewar
 
 export async function POST(request: NextRequest) {
   const context = await resolveTenantContext(request);
-  const permissionError = validatePermission(context, 'view', 'invoices');
+  const permissionError = validatePermission(context, 'view', 'cash_unblock');
   if (permissionError) return permissionError;
 
   const body = await request.json();

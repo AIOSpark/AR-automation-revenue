@@ -11,7 +11,7 @@ const bankAdapter = new BankAdapter();
 
 export async function GET(request: Request) {
   const context = await resolveTenantContext(request);
-  const permissionError = validatePermission(context, 'view', 'invoices');
+  const permissionError = validatePermission(context, 'view', 'reconciliation');
   if (permissionError) return permissionError;
   const { searchParams } = new URL(request.url);
   const orgId = context!.organization.id;
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const context = await resolveTenantContext(request);
-  const permissionError = validatePermission(context, 'edit', 'invoices');
+  const permissionError = validatePermission(context, 'edit', 'reconciliation');
   if (permissionError) return permissionError;
   const body = await request.json();
   const { action, rows } = body;
@@ -61,6 +61,8 @@ export async function POST(request: Request) {
   }
 
   if (action === 'run_reconciliation') {
+    const executePermissionError = validatePermission(context, 'execute', 'reconciliation');
+    if (executePermissionError) return executePermissionError;
     const reconResult = await reconciliationEngine.reconcileTransactions(organizationId);
     return NextResponse.json({
       success: true,

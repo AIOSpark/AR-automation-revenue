@@ -162,6 +162,13 @@ export default function DashboardPage() {
         return;
       }
       const meData = await meRes.json();
+
+      // Enforce mandatory email verification before dashboard access
+      if (meData.requiresEmailVerification) {
+        router.push(`/verify-email?email=${encodeURIComponent(meData.user?.email || "")}`);
+        return;
+      }
+
       setUser(meData.user);
       setOrganization(meData.organization);
 

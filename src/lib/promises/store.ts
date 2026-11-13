@@ -1,4 +1,6 @@
 // AIOSpark Promise-to-Pay System Data Models & Store (Layer 20)
+// Copyright 2026 AIOSpark. All rights reserved.
+
 import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
 
 export type PromiseStatus = 'pending' | 'kept' | 'broken' | 'partial';
@@ -56,8 +58,7 @@ class PromiseStore {
     return this.gracePeriodDays;
   }
 
-  /**
-   * MANUAL RECORDING ENTRY POINT
+  /** MANUAL RECORDING ENTRY POINT
    * Strict Rule: recorded_via MUST be specified and cannot be null/undefined.
    */
   public createPromise(input: CreatePromiseInput): PaymentPromise {
@@ -89,8 +90,19 @@ class PromiseStore {
     return promise;
   }
 
-  public getPromise(id: string): PaymentPromise | null {
-    return this.promises.get(id) || null;
+  /**
+   * Get a promise by ID with organization scoping.
+   * @param id The promise ID
+   * @param orgId The organization ID - mandatory for security-sensitive lookups.
+   *   Must match the promise's organization_id, or Error is thrown.
+   * @returns The promise record.
+   * @throws Error if the promise is not found or organization mismatch.
+   */
+  public getPromise(id: string, orgId: string): PaymentPromise {
+    const p = this.promises.get(id);
+    if (!p) throw new Error(`Promise not found: ${id}`);
+    if (p.organization_id !== orgId) throw new Error(`Cross-tenant access denied: promise organization_id ${p.organization_id} does not match orgId ${orgId}`);
+    return p;
   }
 
   public getPromises(orgId: string, customerId?: string): PaymentPromise[] {
@@ -125,8 +137,7 @@ class PromiseStore {
     return p;
   }
 
-  /**
-   * COMPUTED BROKEN-PROMISE RATE STATISTICS (Trailing 12 Months)
+  /** COMPUTED BROKEN-PROMISE RATE STATISTICS (Trailing 12 Months)
    * Consumed by Customer 360 & Risk Engine (Layer 12).
    */
   public getBrokenPromiseStats(

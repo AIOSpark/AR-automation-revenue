@@ -4,7 +4,16 @@ import { AuditService } from "../audit/service";
 import { Role, Action, Resource, can } from "./permissions";
 import { authStore, OrganizationRecord, UserRecord } from "../auth/store";
 import { getRequestTenant, setRequestTenant } from "./request-context";
-import { deleteSnapshot, readSnapshot, writeSnapshot } from "../db/durable-repository";
+import { isInWriteTransaction, withWriteTransaction } from "../db/durable-repository";
+import {
+  backfillOperationalFromSnapshots,
+  clearTenantState,
+  insertTenantInvite,
+  insertTenantMember,
+  insertTenantRecord,
+  readTenantState,
+  updateTenantMemberRole,
+} from "../db/operational-repository";
 
 export interface OrgMemberRecord {
   id: string;
@@ -39,32 +48,29 @@ class MultiTenantStore {
 
   // Session Context Simulation (Simulates Postgres `SET LOCAL app.current_org_id = ?`)
   constructor() {
-    const state = readSnapshot<{
-      members: OrgMemberRecord[];
-      invites: InviteRecord[];
-      tenantTables: Record<string, TenantScopedRecord[]>;
-    }>('tenant');
-    this.members = new Map((state?.members || []).map((member) => [member.id, member]));
-    this.invites = new Map((state?.invites || []).map((invite) => [invite.token, invite]));
-    // Initialize tenant tables
-    this.tenantTables.set("customers", new Map());
-    this.tenantTables.set("invoices", new Map());
-    this.tenantTables.set("payments", new Map());
-    this.tenantTables.set("exceptions", new Map());
-    this.tenantTables.set("integrations", new Map());
-    for (const [tableName, records] of Object.entries(state?.tenantTables || {})) {
-      this.tenantTables.set(tableName, new Map(records.map((record) => [record.id, record])));
+    backfillOperationalFromSnapshots();
+    this.reloadFromDurableState();
+  }
+
+  private reloadFromDurableState(): void {
+    backfillOperationalFromSnapshots();
+    const state = readTenantState();
+    this.members = new Map((state.members as OrgMemberRecord[]).map((member) => [member.id, member]));
+    this.invites = new Map((state.invites as InviteRecord[]).map((invite) => [invite.token, invite]));
+    this.tenantTables = new Map();
+    for (const tableName of ["customers", "invoices", "payments", "exceptions", "integrations"]) {
+      this.tenantTables.set(tableName, new Map());
+    }
+    for (const [tableName, records] of Object.entries(state.tenantTables)) {
+      this.tenantTables.set(
+        tableName,
+        new Map((records as TenantScopedRecord[]).map((record) => [record.id, record])),
+      );
     }
   }
 
-  private persist(): void {
-    writeSnapshot('tenant', {
-      members: Array.from(this.members.values()),
-      invites: Array.from(this.invites.values()),
-      tenantTables: Object.fromEntries(
-        Array.from(this.tenantTables.entries()).map(([name, records]) => [name, Array.from(records.values())]),
-      ),
-    });
+  private refreshForRead(): void {
+    if (!isInWriteTransaction()) this.reloadFromDurableState();
   }
 
   /**
@@ -97,55 +103,59 @@ class MultiTenantStore {
    * Adds or updates a user membership in an organization with a specific role
    */
   public addMember(userId: string, orgId: string, role: Role, actorUserId?: string): OrgMemberRecord {
-    const existing = this.getMember(userId, orgId);
-    let beforeState: any = null;
-    if (existing) {
-      beforeState = { role: existing.role };
-      existing.role = role;
-      this.persist();
+    return withWriteTransaction(() => {
+      this.reloadFromDurableState();
+      const existing = this.getMember(userId, orgId);
+      let beforeState: any = null;
+      if (existing) {
+        beforeState = { role: existing.role };
+        existing.role = role;
+        updateTenantMemberRole(existing.id, role);
+
+        AuditService.record({
+          organization_id: orgId,
+          actor_user_id: actorUserId || null,
+          actor_type: actorUserId ? 'user' : 'system',
+          action_type: 'user.role_changed',
+          subject_type: 'user',
+          subject_id: userId,
+          before_state: beforeState,
+          after_state: { role },
+          result: 'success',
+        });
+
+        return existing;
+      }
+
+      const id = `mem_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+      const member: OrgMemberRecord = {
+        id,
+        user_id: userId,
+        organization_id: orgId,
+        role,
+        created_at: new Date().toISOString(),
+      };
+
+      insertTenantMember(member);
+      this.members.set(id, member);
 
       AuditService.record({
         organization_id: orgId,
         actor_user_id: actorUserId || null,
         actor_type: actorUserId ? 'user' : 'system',
-        action_type: 'user.role_changed',
+        action_type: 'user.added_to_org',
         subject_type: 'user',
         subject_id: userId,
-        before_state: beforeState,
         after_state: { role },
         result: 'success',
       });
 
-      return existing;
-    }
-
-    const id = `mem_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
-    const member: OrgMemberRecord = {
-      id,
-      user_id: userId,
-      organization_id: orgId,
-      role,
-      created_at: new Date().toISOString(),
-    };
-
-    this.members.set(id, member);
-    this.persist();
-
-    AuditService.record({
-      organization_id: orgId,
-      actor_user_id: actorUserId || null,
-      actor_type: actorUserId ? 'user' : 'system',
-      action_type: 'user.added_to_org',
-      subject_type: 'user',
-      subject_id: userId,
-      after_state: { role },
-      result: 'success',
+      return member;
     });
-
-    return member;
   }
 
   public getMember(userId: string, orgId: string): OrgMemberRecord | null {
+    this.refreshForRead();
     for (const mem of this.members.values()) {
       if (mem.user_id === userId && mem.organization_id === orgId) {
         return mem;
@@ -155,10 +165,11 @@ class MultiTenantStore {
   }
 
   public getUserOrganizations(userId: string): Array<{ organization: OrganizationRecord; role: Role }> {
+    this.refreshForRead();
     const results: Array<{ organization: OrganizationRecord; role: Role }> = [];
     for (const mem of this.members.values()) {
       if (mem.user_id === userId) {
-        const org = (authStore as any).organizations.get(mem.organization_id);
+        const org = authStore.getOrganizationById(mem.organization_id);
         if (org) {
           results.push({ organization: org, role: mem.role });
         }
@@ -168,6 +179,7 @@ class MultiTenantStore {
   }
 
   public getOrgMembers(orgId: string): Array<{ member: OrgMemberRecord; user: UserRecord | null }> {
+    this.refreshForRead();
     const list: Array<{ member: OrgMemberRecord; user: UserRecord | null }> = [];
     for (const mem of this.members.values()) {
       if (mem.organization_id === orgId) {
@@ -187,40 +199,45 @@ class MultiTenantStore {
     role: Role;
     invited_by_user_id: string;
   }): InviteRecord {
-    const token = `inv_tok_${Math.random().toString(36).substring(2, 15)}`;
-    const invite: InviteRecord = {
-      id: `inv_${Math.random().toString(36).substring(2, 11)}`,
-      organization_id: data.organization_id,
-      email: data.email.toLowerCase(),
-      role: data.role,
-      invited_by_user_id: data.invited_by_user_id,
-      status: "pending",
-      token,
-      created_at: new Date().toISOString(),
-    };
+    return withWriteTransaction(() => {
+      this.reloadFromDurableState();
+      const token = `inv_tok_${Math.random().toString(36).substring(2, 15)}`;
+      const invite: InviteRecord = {
+        id: `inv_${Math.random().toString(36).substring(2, 11)}`,
+        organization_id: data.organization_id,
+        email: data.email.toLowerCase(),
+        role: data.role,
+        invited_by_user_id: data.invited_by_user_id,
+        status: "pending",
+        token,
+        created_at: new Date().toISOString(),
+      };
 
-    this.invites.set(token, invite);
-    this.persist();
+      insertTenantInvite(invite);
+      this.invites.set(token, invite);
 
-    AuditService.record({
-      organization_id: data.organization_id,
-      actor_user_id: data.invited_by_user_id,
-      actor_type: 'user',
-      action_type: 'user.invited',
-      subject_type: 'user',
-      subject_id: data.email,
-      after_state: { role: data.role, email: data.email },
-      result: 'success',
+      AuditService.record({
+        organization_id: data.organization_id,
+        actor_user_id: data.invited_by_user_id,
+        actor_type: 'user',
+        action_type: 'user.invited',
+        subject_type: 'user',
+        subject_id: data.email,
+        after_state: { role: data.role, email: data.email },
+        result: 'success',
+      });
+
+      return invite;
     });
-
-    return invite;
   }
 
   public getInviteByToken(token: string): InviteRecord | null {
+    this.refreshForRead();
     return this.invites.get(token) || null;
   }
 
   public getOrgInvites(orgId: string): InviteRecord[] {
+    this.refreshForRead();
     const result: InviteRecord[] = [];
     for (const inv of this.invites.values()) {
       if (inv.organization_id === orgId && inv.status === "pending") {
@@ -235,6 +252,7 @@ class MultiTenantStore {
    * Enforces `app.current_org_id` Row-Level Security at DB layer.
    */
   public queryTenantTable<T extends TenantScopedRecord>(tableName: string): T[] {
+    this.refreshForRead();
     const tableMap = this.tenantTables.get(tableName);
     if (!tableMap) return [];
 
@@ -254,6 +272,7 @@ class MultiTenantStore {
   }
 
   public getTenantRecordById<T extends TenantScopedRecord>(tableName: string, recordId: string): T | null {
+    this.refreshForRead();
     const tableMap = this.tenantTables.get(tableName);
     if (!tableMap) return null;
 
@@ -282,19 +301,23 @@ class MultiTenantStore {
       id,
     } as T;
 
-    tableMap.set(id, fullRecord);
-    this.tenantTables.set(tableName, tableMap);
-    this.persist();
-    return fullRecord;
+    return withWriteTransaction(() => {
+      insertTenantRecord(tableName, fullRecord);
+      tableMap.set(id, fullRecord);
+      this.tenantTables.set(tableName, tableMap);
+      return fullRecord;
+    });
   }
 
   public clearAll(): void {
-    this.members.clear();
-    this.invites.clear();
-    for (const tableMap of this.tenantTables.values()) {
-      tableMap.clear();
-    }
-    deleteSnapshot('tenant');
+    withWriteTransaction(() => {
+      clearTenantState();
+      this.members.clear();
+      this.invites.clear();
+      for (const tableMap of this.tenantTables.values()) {
+        tableMap.clear();
+      }
+    });
   }
 }
 

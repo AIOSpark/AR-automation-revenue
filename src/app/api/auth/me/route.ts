@@ -32,6 +32,8 @@ export async function GET() {
       authenticated: true,
       user,
       organization,
+      email_verified: user.email_verified,
+      requiresEmailVerification: !user.email_verified,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });

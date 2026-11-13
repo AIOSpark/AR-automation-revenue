@@ -14,7 +14,7 @@ const VALID_RECORDING_CHANNELS = new Set<PromiseRecordedVia>([
 
 export async function GET(request: Request) {
   const context = await resolveTenantContext(request);
-  const permissionError = validatePermission(context, 'view', 'customers');
+  const permissionError = validatePermission(context, 'view', 'collections');
   if (permissionError) return permissionError;
   const { searchParams } = new URL(request.url);
   const orgId = context!.organization.id;
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const context = await resolveTenantContext(request);
-    const permissionError = validatePermission(context, 'create', 'customers');
+    const permissionError = validatePermission(context, 'create', 'collections');
     if (permissionError) return permissionError;
     const organization_id = context!.organization.id;
 

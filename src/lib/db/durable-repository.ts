@@ -9,11 +9,46 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { RELATIONAL_SCHEMA_SQL, RELATIONAL_SCHEMA_VERSION } from './relational-schema';
+import { GOVERNANCE_SCHEMA_SQL, GOVERNANCE_SCHEMA_VERSION } from './governance-schema';
+import { OPERATIONAL_SCHEMA_SQL, OPERATIONAL_SCHEMA_VERSION } from './operational-schema';
 
 const databasePath =
   process.env.AIOSPARK_TEST_MODE === 'true'
     ? ':memory:'
     : process.env.AIOSPARK_DB_PATH || path.join(process.cwd(), '.data', 'aiospark.sqlite');
+
+// Startup validation:
+// 1. Test mode with in-memory SQLite is only allowed when NODE_ENV='test' (explicit test runs)
+// 2. Production must have AIOSPARK_DB_PATH set to a persistent file
+// 3. When NOT in test mode, DB path is required for production
+if (process.env.AIOSPARK_TEST_MODE === 'true' && process.env.NODE_ENV !== 'test') {
+  console.error(
+    "[FATAL] AIOSPARK_TEST_MODE is enabled but NODE_ENV is not 'test'. " +
+    "Test mode with in-memory SQLite is only for explicit test runs (set NODE_ENV=test), not production."
+  );
+  process.exit(1);
+}
+
+// When not in explicit test mode (production or development), require AIOSPARK_DB_PATH
+if (process.env.AIOSPARK_TEST_MODE !== 'true' && !process.env.AIOSPARK_DB_PATH) {
+  console.error(
+    "[FATAL] AIOSPARK_DB_PATH is not configured. " +
+    "Set AIOSPARK_DB_PATH to a persistent SQLite file for production runtime."
+  );
+  process.exit(1);
+}
+
+// Only fail on in-memory when not in explicit test mode
+if (databasePath === ':memory:' && process.env.NODE_ENV !== 'test') {
+  console.error(
+    "[FATAL] Database path resolved to in-memory SQLite. " +
+    "This can only happen when AIOSPARK_TEST_MODE=true and NODE_ENV=test. " +
+    "For production/development, set AIOSPARK_DB_PATH to a persistent file path."
+  );
+  process.exit(1);
+}
 
 if (databasePath !== ':memory:') {
   fs.mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -21,7 +56,22 @@ if (databasePath !== ':memory:') {
 
 const database = new DatabaseSync(databasePath);
 database.exec('PRAGMA busy_timeout = 5000');
-database.exec('PRAGMA journal_mode = WAL');
+database.exec('PRAGMA foreign_keys = ON');
+if (databasePath !== ':memory:') {
+  // Concurrent processes may open the file at the same time; a journal-mode
+  // change needs an exclusive lock, so retry briefly instead of failing boot.
+  let walEnabled = false;
+  for (let attempt = 0; attempt < 20 && !walEnabled; attempt++) {
+    try {
+      database.exec('PRAGMA journal_mode = WAL');
+      walEnabled = true;
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'SQLITE_BUSY') throw error;
+      const until = Date.now() + 50;
+      while (Date.now() < until) { /* brief synchronous backoff */ }
+    }
+  }
+}
 database.exec(`
   CREATE TABLE IF NOT EXISTS repository_snapshots (
     namespace TEXT PRIMARY KEY,
@@ -29,6 +79,96 @@ database.exec(`
     updated_at TEXT NOT NULL
   )
 `);
+
+database.exec(`
+  CREATE TABLE IF NOT EXISTS repository_schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+  )
+`);
+database.exec(RELATIONAL_SCHEMA_SQL);
+database.prepare(
+  'INSERT OR IGNORE INTO repository_schema_migrations(version, applied_at) VALUES (?, ?)',
+).run(1, new Date().toISOString());
+database.prepare(
+  'INSERT OR IGNORE INTO repository_schema_migrations(version, applied_at) VALUES (?, ?)',
+).run(RELATIONAL_SCHEMA_VERSION, new Date().toISOString());
+database.exec(GOVERNANCE_SCHEMA_SQL);
+database.prepare(
+  'INSERT OR IGNORE INTO repository_schema_migrations(version, applied_at) VALUES (?, ?)',
+).run(GOVERNANCE_SCHEMA_VERSION, new Date().toISOString());
+database.exec(OPERATIONAL_SCHEMA_SQL);
+database.prepare(
+  'INSERT OR IGNORE INTO repository_schema_migrations(version, applied_at) VALUES (?, ?)',
+).run(OPERATIONAL_SCHEMA_VERSION, new Date().toISOString());
+
+/**
+ * Async-local storage for write transaction depth. SQLite write transactions
+ * are connection-scoped, so nested store calls must share the outer
+ * transaction rather than issuing a second BEGIN. Each async context gets
+ * its own depth counter, preventing concurrent requests from corrupting
+ * each other's transactions.
+ */
+const txDepthStorage = new AsyncLocalStorage<Map<string, number>>();
+
+function getTxDepth(): number {
+  const store = txDepthStorage.getStore();
+  return store ? (store.get('depth') ?? 0) : 0;
+}
+
+function setTxDepth(depth: number): void {
+  const store = txDepthStorage.getStore();
+  if (store) {
+    store.set('depth', depth);
+  }
+}
+
+function runWithTxDepth<T>(depth: number, callback: () => T): T {
+  const store = new Map<string, number>([['depth', depth]]);
+  return txDepthStorage.run(store, callback);
+}
+
+export function withWriteTransaction<T>(callback: () => T): T {
+  const currentDepth = getTxDepth();
+
+  if (currentDepth > 0) {
+    // Nested call within the same async context: join the outer transaction.
+    setTxDepth(currentDepth + 1);
+    try {
+      return callback();
+    } finally {
+      setTxDepth(currentDepth);
+    }
+  }
+
+  if (databasePath === ':memory:') {
+    return runWithTxDepth(1, () => {
+      try {
+        return callback();
+      } finally {
+        setTxDepth(0);
+      }
+    });
+  }
+
+  return runWithTxDepth(1, () => {
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      const result = callback();
+      database.exec('COMMIT');
+      return result;
+    } catch (error) {
+      try {
+        database.exec('ROLLBACK');
+      } catch {
+        // The transaction may already have been rolled back by SQLite.
+      }
+      throw error;
+    } finally {
+      setTxDepth(0);
+    }
+  });
+}
 
 const readStatement = database.prepare(
   'SELECT payload FROM repository_snapshots WHERE namespace = ?',
@@ -81,11 +221,25 @@ export function readSnapshot<T>(namespace: string): T | null {
   }
 }
 
+/**
+ * Run a callback inside one durable SQLite write transaction.
+ *
+ * BEGIN IMMEDIATE takes the database write lock up front, so concurrent
+ * application processes are serialized by SQLite rather than by a
+ * process-local promise. Nested calls join the outer transaction.
+ *
+ * On error the transaction is rolled back, leaving no partial financial
+ * state. If the process dies mid-transaction, SQLite discards the
+ * uncommitted WAL frames on the next open.
+ */
+export function isInWriteTransaction(): boolean {
+  return getTxDepth() > 0;
+}
+
 export function writeSnapshot<T>(namespace: string, value: T): void {
   if (databasePath === ':memory:') return;
   const updatedAt = new Date().toISOString();
-  database.exec('BEGIN IMMEDIATE');
-  try {
+  withWriteTransaction(() => {
     const existingPayload = (readStatement.get(namespace) as { payload?: string } | undefined)?.payload;
     let existing: unknown = null;
     if (existingPayload) {
@@ -93,26 +247,59 @@ export function writeSnapshot<T>(namespace: string, value: T): void {
     }
     const payload = JSON.stringify(mergeConcurrentSnapshots(existing, value));
     writeStatement.run(namespace, payload, updatedAt);
-    database.exec('COMMIT');
-  } catch (error) {
-    database.exec('ROLLBACK');
-    throw error;
-  }
+  });
+}
+
+/**
+ * Exact snapshot replacement for callers that already hold the write lock and
+ * have reloaded the latest state (e.g. the relational UDM compatibility view).
+ */
+export function writeSnapshotExact<T>(namespace: string, value: T): void {
+  if (databasePath === ':memory:') return;
+  withWriteTransaction(() => {
+    writeStatement.run(namespace, JSON.stringify(value), new Date().toISOString());
+  });
 }
 
 export function deleteSnapshot(namespace: string): void {
   if (databasePath === ':memory:') {
     return;
   }
-  deleteStatement.run(namespace);
+  withWriteTransaction(() => {
+    deleteStatement.run(namespace);
+  });
+}
+
+export function getSchemaVersion(): number {
+  interface Row { version: number | null }
+  const row = database
+    .prepare('SELECT MAX(version) AS version FROM repository_schema_migrations')
+    .get() as Row | undefined;
+  return row?.version ?? 0;
 }
 
 export function getDurableStatePath(): string {
   return databasePath;
 }
 
+type DirectSnapshotProvider = (namespace: string) => unknown | null;
+const directSnapshotProviders: DirectSnapshotProvider[] = [];
+
+/**
+ * Allow a relational storage layer to supply the compatibility view for legacy
+ * direct-snapshot readers. The provider must return null when it has no rows.
+ */
+export function registerDirectSnapshotProvider(provider: DirectSnapshotProvider): void {
+  directSnapshotProviders.push(provider);
+}
+
 // Direct SQLite read for independent verification (bypasses in-memory state)
 export function readSnapshotDirect<T>(namespace: string): T | null {
+  for (const provider of directSnapshotProviders) {
+    const supplied = provider(namespace);
+    if (supplied !== null && supplied !== undefined) return supplied as T;
+  }
+
   const payload = (readStatement.get(namespace) as { payload?: string } | undefined)?.payload;
   if (!payload) return null;
 
@@ -123,7 +310,7 @@ export function readSnapshotDirect<T>(namespace: string): T | null {
   }
 }
 
-export function getDatabase() {
+export function getDatabase(): DatabaseSync {
   return database;
 }
 

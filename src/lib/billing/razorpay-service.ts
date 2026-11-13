@@ -2,7 +2,11 @@
 import crypto from 'crypto';
 import { billingStore, DEFAULT_PLANS, PlanTierId, BillingInterval, SubscriptionStatus } from './store';
 import { AuditService } from '../audit/service';
-import { readSnapshot, writeSnapshot } from '../db/durable-repository';
+import {
+  backfillOperationalFromSnapshots,
+  insertBillingEventLog,
+  readBillingEventLog,
+} from '../db/operational-repository';
 
 export interface RazorpayPlanMapping {
   planTierId: PlanTierId;
@@ -47,7 +51,10 @@ function getWebhookSecret(): string | null {
 }
 
 export class RazorpayBillingService {
-  private static billingEvents: BillingEventLog[] = readSnapshot<BillingEventLog[]>('razorpay_billing_events') || [];
+  private static billingEvents: BillingEventLog[] = (() => {
+    backfillOperationalFromSnapshots();
+    return readBillingEventLog() as BillingEventLog[];
+  })();
 
   // Mapped Razorpay Plan IDs (Test Mode)
   private static PLAN_MAPPINGS: Record<string, string> = {
@@ -231,6 +238,7 @@ export class RazorpayBillingService {
       return { success: false, message: 'Malformed Razorpay webhook payload.' };
     }
     const eventId = typeof payload.id === 'string' ? payload.id : null;
+    this.billingEvents = readBillingEventLog() as BillingEventLog[];
     if (eventId && this.billingEvents.some((event) => event.razorpay_event_id === eventId && event.signature_verified)) {
       return { success: true, message: 'Webhook event already processed.', eventType: payload.event };
     }
@@ -342,14 +350,15 @@ export class RazorpayBillingService {
       created_at: new Date().toISOString(),
       ...data,
     };
+    insertBillingEventLog(record);
     this.billingEvents.push(record);
-    writeSnapshot('razorpay_billing_events', this.billingEvents);
   }
 
   /**
    * Get billing audit history for an organization
    */
   public static getBillingHistory(organizationId: string): BillingEventLog[] {
+    this.billingEvents = readBillingEventLog() as BillingEventLog[];
     return this.billingEvents.filter((evt) => evt.organization_id === organizationId);
   }
 }

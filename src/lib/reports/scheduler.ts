@@ -16,8 +16,11 @@ export interface ReportScheduleRecord {
   recipients: string[]; // Email addresses
   cadence: ScheduleCadence;
   created_by_user_id: string;
+  status?: 'active' | 'paused' | 'disabled';
   last_run_at?: string | null;
   next_run_at?: string | null;
+  run_count?: number;
+  max_runs?: number;
   created_at: string;
   updated_at: string;
 }
@@ -62,20 +65,31 @@ class ReportSchedulerStore {
     return record;
   }
 
+  /**
+   * Get a schedule by ID with organization scoping.
+   * @param id The schedule ID
+   * @param orgId The organization ID - mandatory for security-sensitive lookups.
+   *   Must match the schedule's organization_id, or Error is thrown.
+   * @returns The schedule record.
+   * @throws Error if the schedule is not found or organization mismatch.
+   */
+  public getSchedule(id: string, orgId: string): ReportScheduleRecord {
+    const s = this.schedules.get(id);
+    if (!s) throw new Error(`Schedule not found: ${id}`);
+    if (s.organization_id !== orgId) throw new Error(`Cross-tenant access denied: schedule organization_id ${s.organization_id} does not match orgId ${orgId}`);
+    return s;
+  }
+
+  /**
+   * Get schedules for a specific organization.
+   * @param orgId The organization ID to filter by.
+   * @returns Array of schedules belonging to the organization.
+   */
   public getSchedules(orgId: string): ReportScheduleRecord[] {
     return Array.from(this.schedules.values()).filter((s) => s.organization_id === orgId);
   }
 
-  public getSchedule(id: string): ReportScheduleRecord | undefined {
-    return this.schedules.get(id);
-  }
-
-  public clearAll(): void {
-    this.schedules.clear();
-  }
-
-  /**
-   * SCHEDULED JOB RUNNER
+  /** SCHEDULED JOB RUNNER
    * Evaluates report schedules and dispatches reports via Layer 19 Email Provider.
    */
   public async runScheduledReportsJob(
@@ -112,7 +126,7 @@ class ReportSchedulerStore {
           const sendRes = await TransactionalEmailProvider.sendEmail({
             toEmail: recipientEmail,
             subject: `[AIOSpark Scheduled Report] ${reportDef.name} (${reportOutput.format.toUpperCase()})`,
-            body: `Attached is your scheduled ${sched.cadence} report "${reportDef.name}" generated on ${reportOutput.generatedAt}.\nRows included: ${reportOutput.rowCount}\nFile name: ${reportOutput.fileName}`,
+            body: `Attached is your scheduled ${sched.cadence} report "${reportDef.name}" generated on ${reportOutput.generatedAt}.\\nRows included: ${reportOutput.rowCount}\\nFile name: ${reportOutput.fileName}`,
             organizationId: sched.organization_id,
           });
 
@@ -132,6 +146,10 @@ class ReportSchedulerStore {
     }
 
     return { processedCount, emailsSentCount, errors };
+  }
+
+  public clearAll(): void {
+    this.schedules.clear();
   }
 }
 

@@ -1,51 +1,50 @@
-import { readSnapshot, writeSnapshot } from '../db/durable-repository';
-
-interface RevokedSessionRecord {
-  jti: string;
-  exp: number;
-}
+import { withWriteTransaction } from '../db/durable-repository';
+import {
+  backfillOperationalFromSnapshots,
+  clearRevokedSessions,
+  deleteExpiredRevokedSessions,
+  insertRevokedSession,
+  readRevokedSessions,
+} from '../db/operational-repository';
 
 class SessionRevocationStore {
   private revoked = new Map<string, number>();
 
   constructor() {
-    const persisted = readSnapshot<RevokedSessionRecord[]>('auth_session_revocations') || [];
+    backfillOperationalFromSnapshots();
+    this.reloadFromDurableState();
+  }
+
+  private reloadFromDurableState(): void {
+    backfillOperationalFromSnapshots();
     const now = Math.floor(Date.now() / 1000);
-    for (const record of persisted) {
-      if (record.jti && record.exp > now) {
-        this.revoked.set(record.jti, record.exp);
-      }
-    }
+    this.revoked = new Map(
+      readRevokedSessions()
+        .filter((record) => record.jti && record.exp > now)
+        .map((record) => [record.jti, record.exp]),
+    );
   }
 
   public revoke(jti: string, exp: number): void {
-    this.prune();
-    this.revoked.set(jti, exp);
-    this.persist();
+    withWriteTransaction(() => {
+      const now = Math.floor(Date.now() / 1000);
+      deleteExpiredRevokedSessions(now);
+      insertRevokedSession(jti, exp);
+      this.reloadFromDurableState();
+    });
   }
 
   public isRevoked(jti: string): boolean {
+    this.reloadFromDurableState();
     const exp = this.revoked.get(jti);
     return typeof exp === 'number' && exp > Math.floor(Date.now() / 1000);
   }
 
   public clearAll(): void {
-    this.revoked.clear();
-    writeSnapshot('auth_session_revocations', []);
-  }
-
-  private prune(): void {
-    const now = Math.floor(Date.now() / 1000);
-    for (const [jti, exp] of this.revoked) {
-      if (exp <= now) this.revoked.delete(jti);
-    }
-  }
-
-  private persist(): void {
-    writeSnapshot(
-      'auth_session_revocations',
-      Array.from(this.revoked.entries()).map(([jti, exp]) => ({ jti, exp }))
-    );
+    withWriteTransaction(() => {
+      clearRevokedSessions();
+      this.revoked.clear();
+    });
   }
 }
 

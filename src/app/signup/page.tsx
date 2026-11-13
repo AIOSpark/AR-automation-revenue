@@ -67,7 +67,11 @@ export default function SignupPage() {
         throw new Error(data.error || "Signup failed");
       }
 
-      router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+      if (data.requiresEmailVerification) {
+        router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       setError(err?.message || "An unexpected error occurred");
     } finally {

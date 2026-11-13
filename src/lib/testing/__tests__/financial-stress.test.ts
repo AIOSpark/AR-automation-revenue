@@ -36,6 +36,7 @@ export async function runFinancialStressTestSuite() {
   approvalStore.clearAll();
 
   // Helper functions that create fresh data each time
+  let activeStressCustomerId = '';
   function createCustomer(orgId: string) {
     const customer = udmStore.insertCustomer({
       organization_id: orgId,
@@ -46,6 +47,7 @@ export async function runFinancialStressTestSuite() {
       credit_limit_minor_units: 100000000,
       currency: 'INR',
     });
+    activeStressCustomerId = customer.id;
     return customer.id;
   }
 
@@ -54,7 +56,7 @@ export async function runFinancialStressTestSuite() {
     const invoice = udmStore.insertInvoice({
       organization_id: orgId,
       number: 'STRESS-INV-' + Date.now(),
-      customer_id: 'stress_cust',
+      customer_id: activeStressCustomerId,
       amount_minor_units: amount,
       currency: 'INR',
       tax_amount_minor_units: 0,
@@ -72,7 +74,7 @@ export async function runFinancialStressTestSuite() {
       organization_id: orgId,
       amount_minor_units: amount,
       currency: 'INR',
-      customer_id: 'stress_cust',
+      customer_id: activeStressCustomerId,
       source_system: 'manual',
       source_id: 'stress_pay',
       date: new Date().toISOString(),

@@ -7,7 +7,13 @@ import { BankTransaction, Invoice, PaymentInvoiceMatch } from '../udm/types';
 import { approvalStore, ApprovalRequest } from '../approvals/store';
 import { policyEngine } from '../agents/policy-engine';
 import { dashboardMetricsStore } from '../dashboard/engine';
-import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
+import {
+  backfillOperationalFromSnapshots,
+  clearReconciliationOutcomes,
+  insertReconciliationOutcome,
+  readReconciliationOutcomes,
+} from '../db/operational-repository';
+import { withWriteTransaction } from '../db/durable-repository';
 
 export interface ProposedMatch {
   bankTransactionId: string;
@@ -41,21 +47,16 @@ export interface MatchOutcomeRecord {
 export class ReconciliationEngine {
   private outcomes: Map<string, MatchOutcomeRecord> = new Map();
 
-  /**
-   * Persists reconciliation outcomes to the durable snapshot store so that
-   * match-outcome audit history survives application restarts.
-   */
-  private persist(): void {
-    writeSnapshot<MatchOutcomeRecord[]>('reconciliation_outcomes', Array.from(this.outcomes.values()));
+  constructor() {
+    backfillOperationalFromSnapshots();
+    this.reloadFromDurableState();
   }
 
-  constructor() {
-    const persisted = readSnapshot<MatchOutcomeRecord[]>('reconciliation_outcomes');
-    if (persisted) {
-      for (const record of persisted) {
-        this.outcomes.set(record.id, record);
-      }
-    }
+  private reloadFromDurableState(): void {
+    backfillOperationalFromSnapshots();
+    this.outcomes = new Map(
+      (readReconciliationOutcomes() as MatchOutcomeRecord[]).map((record) => [record.id, record]),
+    );
   }
 
   /**
@@ -424,44 +425,43 @@ export class ReconciliationEngine {
         matched_invoice_ids: invoiceIds,
       });
 
+      // 4. Outcome row and audit events join the same durable transaction.
+      const isModified = Boolean(overridePayload || appReq.modification);
+      const outcomeRecord: MatchOutcomeRecord = {
+        id: `outc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        organizationId: orgId,
+        bankTransactionId: tx.id,
+        originalConfidence: appReq.confidence,
+        originalMatchMethod: payload.match_method || 'deterministic',
+        actionType: 'payment_reconciliation_match',
+        outcome: isModified ? 'modified' : 'approved',
+        finalInvoiceIds: invoiceIds,
+        reviewedByUserId: reviewedUserId,
+        reviewedAt: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      insertReconciliationOutcome(outcomeRecord);
+      this.outcomes.set(outcomeRecord.id, outcomeRecord);
+
+      for (const invId of invoiceIds) {
+        AuditService.record({
+          organization_id: orgId,
+          actor_user_id: reviewedUserId,
+          actor_type: 'user',
+          action_type: 'reconciliation.matched',
+          subject_type: 'invoice',
+          subject_id: invId,
+          after_state: { bank_transaction_id: tx.id, payment_id: payment.id, matched_invoices: invoiceIds },
+          approval_context: { approval_request_id: approvalRequestId, status: 'approved', reviewer_id: reviewedUserId },
+          result: 'success',
+        });
+      }
+
       return { payment, createdMatchIds };
     });
 
     const payment = result.payment;
     const createdMatchIds = result.createdMatchIds;
-
-    // 4. Record outcome audit record for historical accuracy dataset
-    const isModified = Boolean(overridePayload || appReq.modification);
-    const outcomeRecord: MatchOutcomeRecord = {
-      id: `outc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      organizationId: orgId,
-      bankTransactionId: tx.id,
-      originalConfidence: appReq.confidence,
-      originalMatchMethod: payload.match_method || 'deterministic',
-      actionType: 'payment_reconciliation_match',
-      outcome: isModified ? 'modified' : 'approved',
-      finalInvoiceIds: invoiceIds,
-      reviewedByUserId: reviewedUserId,
-      reviewedAt: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    };
-    this.outcomes.set(outcomeRecord.id, outcomeRecord);
-    this.persist();
-
-    // Wire into Layer 26 Audit Log
-    for (const invId of invoiceIds) {
-      AuditService.record({
-        organization_id: orgId,
-        actor_user_id: reviewedUserId,
-        actor_type: 'user',
-        action_type: 'reconciliation.matched',
-        subject_type: 'invoice',
-        subject_id: invId,
-        after_state: { bank_transaction_id: tx.id, payment_id: payment.id, matched_invoices: invoiceIds },
-        approval_context: { approval_request_id: approvalRequestId, status: 'approved', reviewer_id: reviewedUserId },
-        result: 'success',
-      });
-    }
 
     // 5. Trigger Layer 9 Dashboard Cache recompute
     dashboardMetricsStore.refreshMetrics(orgId);
@@ -492,40 +492,57 @@ export class ReconciliationEngine {
     udmStore.setTenantContext(orgId);
 
     const txId = payload.bank_transaction_id;
-    if (txId) {
-      udmStore.updateBankTransaction(txId, {
-        status: 'unmatched',
-        rejection_reason: reason || 'Rejected by approver',
-      });
-    }
+    await udmStore.transaction(() => {
+      if (txId) {
+        udmStore.updateBankTransaction(txId, {
+          status: 'unmatched',
+          rejection_reason: reason || 'Rejected by approver',
+        });
+      }
 
-    const outcomeRecord: MatchOutcomeRecord = {
-      id: `outc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      organizationId: orgId,
-      bankTransactionId: txId,
-      originalConfidence: appReq.confidence,
-      originalMatchMethod: payload.match_method || 'deterministic',
-      actionType: 'payment_reconciliation_match',
-      outcome: 'rejected',
-      finalInvoiceIds: [],
-      reviewedByUserId: reviewedUserId,
-      rejectionReason: reason || null,
-      reviewedAt: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    };
-    this.outcomes.set(outcomeRecord.id, outcomeRecord);
-    this.persist();
+      const outcomeRecord: MatchOutcomeRecord = {
+        id: `outc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        organizationId: orgId,
+        bankTransactionId: txId,
+        originalConfidence: appReq.confidence,
+        originalMatchMethod: payload.match_method || 'deterministic',
+        actionType: 'payment_reconciliation_match',
+        outcome: 'rejected',
+        finalInvoiceIds: [],
+        reviewedByUserId: reviewedUserId,
+        rejectionReason: reason || null,
+        reviewedAt: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      insertReconciliationOutcome(outcomeRecord);
+      this.outcomes.set(outcomeRecord.id, outcomeRecord);
+
+      AuditService.record({
+        organization_id: orgId,
+        actor_user_id: reviewedUserId,
+        actor_type: 'user',
+        action_type: 'reconciliation.rejected',
+        subject_type: 'payment',
+        subject_id: txId || approvalRequestId,
+        after_state: { status: 'unmatched', reason: reason || null },
+        approval_context: { approval_request_id: approvalRequestId, status: 'rejected', reviewer_id: reviewedUserId },
+        result: 'success',
+      });
+    });
 
     return { success: true };
   }
 
   public getOutcomes(orgId: string): MatchOutcomeRecord[] {
+    this.reloadFromDurableState();
     return Array.from(this.outcomes.values()).filter((o) => o.organizationId === orgId);
   }
 
   public clearAll(): void {
-    this.outcomes.clear();
-    deleteSnapshot('reconciliation_outcomes');
+    withWriteTransaction(() => {
+      clearReconciliationOutcomes();
+      this.outcomes.clear();
+    });
   }
 }
 

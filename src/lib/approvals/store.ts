@@ -3,7 +3,17 @@
 
 import { AuditService } from '../audit/service';
 import { aiQualityStore } from '../observability/ai-quality';
-import { deleteSnapshot, readSnapshot, writeSnapshot } from '../db/durable-repository';
+import { isInWriteTransaction, withWriteTransaction } from '../db/durable-repository';
+import {
+  backfillGovernanceFromSnapshots,
+  clearApprovalState,
+  insertApprovalDecision,
+  insertApprovalLog,
+  insertApprovalRequest,
+  readApprovalState,
+  updateApprovalRequest,
+  upsertAutonomyConfig,
+} from '../db/governance-repository';
 
 export type ApprovalActionType =
   | 'ALTER_INVOICE_VALUE'
@@ -56,11 +66,18 @@ export interface GraduatedAutonomyConfig {
   min_confidence_threshold: number; // e.g. 0.95
 }
 
-type ApprovalState = {
-  requests: ApprovalRequest[];
-  logs: ApprovalLogEntry[];
-  autonomyConfigs: GraduatedAutonomyConfig[];
-};
+/**
+ * Raised when a competing process has already made a terminal decision.
+ * Routes translate this to HTTP 409 rather than overwriting the decision.
+ */
+export class ApprovalConflictError extends Error {
+  public readonly code = 'APPROVAL_DECISION_CONFLICT';
+
+  constructor(id: string, status: ApprovalStatus) {
+    super(`Approval request ${id} is already ${status}`);
+    this.name = 'ApprovalConflictError';
+  }
+}
 
 class ApprovalStore {
   private requests: Map<string, ApprovalRequest> = new Map();
@@ -69,24 +86,50 @@ class ApprovalStore {
   private autonomyConfigs: Map<string, GraduatedAutonomyConfig> = new Map();
 
   constructor() {
-    const state = readSnapshot<ApprovalState>('approvals');
-    if (!state) return;
-    this.requests = new Map(state.requests.map((item) => [item.id, item]));
-    this.logs = state.logs;
-    this.autonomyConfigs = new Map(state.autonomyConfigs.map((item) => [item.id, item]));
+    backfillGovernanceFromSnapshots();
+    this.reloadFromDurableState();
   }
 
-  private persist(): void {
-    writeSnapshot<ApprovalState>('approvals', {
-      requests: Array.from(this.requests.values()),
-      logs: this.logs,
-      autonomyConfigs: Array.from(this.autonomyConfigs.values()),
-    });
+  /**
+   * Replace local caches with the latest committed snapshot. Called after the
+   * database write lock is acquired, so a decision validates the current state.
+   */
+  private reloadFromDurableState(): void {
+    backfillGovernanceFromSnapshots();
+    const state = readApprovalState() as unknown as {
+      requests: ApprovalRequest[];
+      logs: ApprovalLogEntry[];
+      autonomyConfigs: GraduatedAutonomyConfig[];
+    };
+    this.requests = new Map((state.requests || []).map((item) => [item.id, item]));
+    this.logs = state.logs || [];
+    this.autonomyConfigs = new Map((state.autonomyConfigs || []).map((item) => [item.id, item]));
+  }
+
+  private refreshForRead(): void {
+    if (!isInWriteTransaction()) this.reloadFromDurableState();
+  }
+
+  /**
+   * Run one mutation inside `BEGIN IMMEDIATE`, after reloading committed state.
+   * On failure the cache is reloaded so a rolled-back decision is not visible.
+   */
+  private runMutation<T>(callback: () => T): T {
+    try {
+      return withWriteTransaction(() => {
+        this.reloadFromDurableState();
+        return callback();
+      });
+    } catch (error) {
+      this.reloadFromDurableState();
+      throw error;
+    }
   }
 
   public createRequest(
     data: Omit<ApprovalRequest, 'id' | 'status' | 'created_at'>
   ): ApprovalRequest {
+    return this.runMutation(() => {
     const id = `appr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
 
@@ -100,16 +143,18 @@ class ApprovalStore {
 
     this.requests.set(id, req);
 
-    // Write append-only log entry
-    this.appendLog({
+    // Write the request and its append-only creation log.
+    const creationLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'created',
       actor_user_id: null,
       details: { proposed_action: req.proposed_action, action_type: req.action_type },
       created_at: now,
-    });
-    this.persist();
+    };
+    insertApprovalRequest(req);
+    this.appendLog(creationLog);
+    insertApprovalLog(creationLog, req.organization_id);
 
     // Wire into Layer 26 Audit Log
     AuditService.record({
@@ -126,13 +171,16 @@ class ApprovalStore {
     });
 
     return req;
+    });
   }
 
   public getRequest(id: string): ApprovalRequest | null {
+    this.refreshForRead();
     return this.requests.get(id) || null;
   }
 
   public getRequests(orgId: string, statusFilter?: ApprovalStatus): ApprovalRequest[] {
+    this.refreshForRead();
     const orgReqs = Array.from(this.requests.values()).filter((r) => r.organization_id === orgId);
     if (statusFilter) {
       return orgReqs.filter((r) => r.status === statusFilter);
@@ -141,15 +189,17 @@ class ApprovalStore {
   }
 
   public findByIdempotencyKey(orgId: string, idempotencyKey: string): ApprovalRequest | null {
+    this.refreshForRead();
     return Array.from(this.requests.values()).find(
       (request) => request.organization_id === orgId && request.proposed_action?.idempotency_key === idempotencyKey
     ) || null;
   }
 
   public approveRequest(id: string, reviewerUserId: string): ApprovalRequest {
+    return this.runMutation(() => {
     const req = this.requests.get(id);
     if (!req) throw new Error(`Approval request not found: ${id}`);
-    if (req.status !== 'pending') throw new Error(`Approval request ${id} is already ${req.status}`);
+    if (req.status !== 'pending') throw new ApprovalConflictError(id, req.status);
 
     const now = new Date().toISOString();
     const beforeState = { status: req.status };
@@ -160,14 +210,18 @@ class ApprovalStore {
     req.reviewed_by_user_id = reviewerUserId;
     req.reviewed_at = now;
 
-    this.appendLog({
+    const decisionLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'approved',
       actor_user_id: reviewerUserId,
       details: { action_type: req.action_type },
       created_at: now,
-    });
+    };
+    updateApprovalRequest(req);
+    insertApprovalDecision(req);
+    this.appendLog(decisionLog);
+    insertApprovalLog(decisionLog, req.organization_id);
 
     // Wire into Layer 26 Audit Log
     AuditService.record({
@@ -186,15 +240,16 @@ class ApprovalStore {
 
     // Wire into Layer 29 Observability AI Quality Feedback Loop
     aiQualityStore.recordFromApprovalRequest(req, 'approved');
-    this.persist();
 
     return req;
+    });
   }
 
   public rejectRequest(id: string, reviewerUserId: string, reason?: string): ApprovalRequest {
+    return this.runMutation(() => {
     const req = this.requests.get(id);
     if (!req) throw new Error(`Approval request not found: ${id}`);
-    if (req.status !== 'pending') throw new Error(`Approval request ${id} is already ${req.status}`);
+    if (req.status !== 'pending') throw new ApprovalConflictError(id, req.status);
 
     const now = new Date().toISOString();
     const beforeState = { status: req.status };
@@ -206,14 +261,18 @@ class ApprovalStore {
     req.reviewed_at = now;
     req.rejection_reason = reason || null;
 
-    this.appendLog({
+    const rejectionLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'rejected',
       actor_user_id: reviewerUserId,
       details: { reason: req.rejection_reason },
       created_at: now,
-    });
+    };
+    updateApprovalRequest(req);
+    insertApprovalDecision(req);
+    this.appendLog(rejectionLog);
+    insertApprovalLog(rejectionLog, req.organization_id);
 
     // Wire into Layer 26 Audit Log
     AuditService.record({
@@ -232,9 +291,9 @@ class ApprovalStore {
 
     // Wire into Layer 29 Observability AI Quality Feedback Loop
     aiQualityStore.recordFromApprovalRequest(req, 'rejected');
-    this.persist();
 
     return req;
+    });
   }
 
   public modifyAndApproveRequest(
@@ -242,9 +301,10 @@ class ApprovalStore {
     reviewerUserId: string,
     modificationPayload: Record<string, any>
   ): ApprovalRequest {
+    return this.runMutation(() => {
     const req = this.requests.get(id);
     if (!req) throw new Error(`Approval request not found: ${id}`);
-    if (req.status !== 'pending') throw new Error(`Approval request ${id} is already ${req.status}`);
+    if (req.status !== 'pending') throw new ApprovalConflictError(id, req.status);
 
     const now = new Date().toISOString();
     const beforeState = { status: req.status, proposed_action: req.proposed_action };
@@ -256,23 +316,28 @@ class ApprovalStore {
     req.reviewed_at = now;
     req.modification = modificationPayload;
 
-    this.appendLog({
+    const modificationLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'modified',
       actor_user_id: reviewerUserId,
       details: { original: req.proposed_action, modified: modificationPayload },
       created_at: now,
-    });
-
-    this.appendLog({
+    };
+    const modifiedApprovalLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'approved',
       actor_user_id: reviewerUserId,
       details: { was_modified: true },
       created_at: now,
-    });
+    };
+    updateApprovalRequest(req);
+    insertApprovalDecision(req);
+    this.appendLog(modificationLog);
+    this.appendLog(modifiedApprovalLog);
+    insertApprovalLog(modificationLog, req.organization_id);
+    insertApprovalLog(modifiedApprovalLog, req.organization_id);
 
     // Wire into Layer 26 Audit Log
     AuditService.record({
@@ -291,29 +356,40 @@ class ApprovalStore {
 
     // Wire into Layer 29 Observability AI Quality Feedback Loop
     aiQualityStore.recordFromApprovalRequest(req, 'modified', modificationPayload);
-    this.persist();
 
     return req;
+    });
   }
 
   public markExecutionResult(id: string, result: 'succeeded' | 'failed', error?: string): ApprovalRequest {
+    return this.runMutation(() => {
     const req = this.requests.get(id);
     if (!req) throw new Error(`Approval request not found: ${id}`);
     if (req.status !== 'approved') throw new Error(`Approval request ${id} is not approved`);
+
+    // Idempotent: if this execution result is already recorded, return early.
+    // Repeated execution requests must be safe and must not create duplicate
+    // financial effects or duplicate audit events.
+    if (req.execution_status === result && req.executed_at !== null) {
+      return req;
+    }
 
     const now = new Date().toISOString();
     req.execution_status = result;
     req.execution_error = result === 'failed' ? (error || 'Approval execution failed') : null;
     req.executed_at = now;
 
-    this.appendLog({
+    const executionLog: ApprovalLogEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       approval_request_id: id,
       event_type: 'executed',
       actor_user_id: req.reviewed_by_user_id || null,
       details: { result, error: req.execution_error },
       created_at: now,
-    });
+    };
+    updateApprovalRequest(req);
+    this.appendLog(executionLog);
+    insertApprovalLog(executionLog, req.organization_id);
 
     AuditService.record({
       organization_id: req.organization_id,
@@ -326,9 +402,9 @@ class ApprovalStore {
       approval_context: { approval_request_id: id, status: req.status, execution_status: result },
       result: result === 'succeeded' ? 'success' : 'failure',
     });
-    this.persist();
 
     return req;
+    });
   }
 
   // --- APPEND-ONLY LOG GUARANTEE ---
@@ -338,6 +414,7 @@ class ApprovalStore {
   }
 
   public getLogs(requestId?: string): ApprovalLogEntry[] {
+    this.refreshForRead();
     if (requestId) {
       return this.logs.filter((l) => l.approval_request_id === requestId);
     }
@@ -346,11 +423,14 @@ class ApprovalStore {
 
   // --- GRADUATED AUTONOMY CONFIG STORE ---
   public setAutonomyConfig(config: GraduatedAutonomyConfig): void {
-    this.autonomyConfigs.set(config.id, config);
-    this.persist();
+    this.runMutation(() => {
+      this.autonomyConfigs.set(config.id, config);
+      upsertAutonomyConfig(config);
+    });
   }
 
   public getAutonomyConfig(orgId: string, actionType: string): GraduatedAutonomyConfig | null {
+    this.refreshForRead();
     const key = `${orgId}:${actionType}`;
     const cfg = Array.from(this.autonomyConfigs.values()).find(
       (c) => c.organization_id === orgId && c.action_type === actionType
@@ -368,10 +448,10 @@ class ApprovalStore {
   }
 
   public clearAll(): void {
+    clearApprovalState();
     this.requests.clear();
     this.logs = [];
     this.autonomyConfigs.clear();
-    deleteSnapshot('approvals');
   }
 }
 

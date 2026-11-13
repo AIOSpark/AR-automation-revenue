@@ -492,7 +492,7 @@ export class AgentExecutor {
         // currently allowed to execute without approval. Previously this
         // guard only ran on the approval branch, so a rapid double-click on a
         // normal reminder could execute twice.
-        const dupCheck = safetyMiddlewareEngine.checkDoubleExecution(enrichedCtx);
+        const dupCheck = await safetyMiddlewareEngine.checkDoubleExecution(enrichedCtx);
         if (dupCheck.isDuplicate) {
           log.status = 'execution_failed';
           log.durationMs = Date.now() - startMs;

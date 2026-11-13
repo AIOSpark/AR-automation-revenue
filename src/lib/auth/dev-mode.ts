@@ -9,12 +9,18 @@ export function isDevAuthEnabled(): boolean {
 
 export function isAuthProviderConfigured(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const legacyAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Prefer publishable key (modern Supabase); fall back to legacy anon key
+  const key = publishableKey || legacyAnonKey;
   return Boolean(
     url &&
       !url.includes("placeholder") &&
       key &&
-      !key.includes("placeholder")
+      !key.includes("placeholder") &&
+      // Reject placeholder defaults (these indicate misconfiguration)
+      url !== "https://placeholder-project.supabase.co" &&
+      key !== "placeholder-anon-key"
   );
 }
 
@@ -31,4 +37,35 @@ export function isSessionSecretStrong(secret: string | null): boolean {
   // which yields 43 base64url characters. Reject predictable / short values.
   const base64Url = /^[A-Za-z0-9_-]+$/;
   return base64Url.test(secret) && secret.length >= 43;
+}
+
+export function isSessionSecretConfigured(): boolean {
+  return Boolean(process.env.AIOSPARK_SESSION_SECRET);
+}
+
+export function requireSessionSecret(): string {
+  const secret = process.env.AIOSPARK_SESSION_SECRET;
+  if (!secret) {
+    console.error(
+      "[FATAL] AIOSPARK_SESSION_SECRET is not configured. " +
+        "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\" " +
+        "and set in the .env file."
+    );
+    process.exit(1);
+  }
+  if (secret.length < 43) {
+    console.error(
+      "[FATAL] AIOSPARK_SESSION_SECRET is too short. " +
+        "Must be at least 43 base64url characters (256 bits of entropy)."
+    );
+    process.exit(1);
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(secret)) {
+    console.error(
+      "[FATAL] AIOSPARK_SESSION_SECRET contains invalid characters. " +
+        "Must be base64url-safe: A-Za-z0-9_- only."
+    );
+    process.exit(1);
+  }
+  return secret;
 }

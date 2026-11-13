@@ -159,7 +159,7 @@ export async function runPromiseTestSuite() {
 
   const jobRes3 = await PromiseCheckJob.runDailyCheck(testOrgId, '2026-02-20');
   if (jobRes3.retroactiveKeptCount !== 1) throw new Error('Daily check failed to retroactively update broken promise to KEPT');
-  const recheckedPromise = promiseStore.getPromise(brokenPromise.id);
+  const recheckedPromise = promiseStore.getPromise(brokenPromise.id, testOrgId);
   if (recheckedPromise?.status !== 'kept') throw new Error('Broken promise status was not retroactively updated to KEPT');
   console.log('⚡ [PASS] 2c. Broken promise retroactively updated to KEPT upon late matching payment arrival');
 

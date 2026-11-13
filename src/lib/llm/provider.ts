@@ -1,7 +1,7 @@
 // AIOSpark LLM Provider Interface (Layer 30)
 // Defines the contract that all model providers must implement.
 // Server-only: API keys and provider configuration must never reach client bundles.
-import './server-only';
+import 'server-only';
 
 import {
   LLMMessage,
